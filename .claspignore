@@ -1,0 +1,6 @@
+# Send only Apps Script source files to Google.
+# This keeps Git files, notes, and credentials out of the Apps Script project.
+**/**
+!appsscript.json
+!*.gs
+!*.html
