@@ -1,0 +1,732 @@
+<script>
+  (function() {
+    var STORAGE_KEY = 'piratePantryStateV1';
+    var app = document.getElementById('app');
+    var appData = null;
+    var state = null;
+    var currentCard = null;
+    var selectedOptions = [];
+    var syncTimer = null;
+    var syncInFlight = false;
+    var pendingSyncReason = '';
+
+    function init() {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          appData = data;
+          showStartingScreen();
+        })
+        .withFailureHandler(function(error) {
+          showError('The game could not load yet. ' + getErrorMessage(error));
+        })
+        .getGameData();
+    }
+
+    function showStartingScreen() {
+      var saved = loadSavedState();
+
+      if (saved && saved.questionBankVersion === appData.config.questionBankVersion && saved.totalCorrect < appData.config.targetCorrect) {
+        state = saved;
+        showResumePrompt(saved);
+        return;
+      }
+
+      showLanding();
+    }
+
+    function showLanding() {
+      currentCard = null;
+      selectedOptions = [];
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="brand-mark" aria-hidden="true">PP</div>',
+        '  <div class="panel story-panel">',
+        '    <h1>' + escapeHtml(appData.config.gameTitle) + '</h1>',
+        '    <p class="subtitle">Sort foods, functions, building blocks, and elements to prove you know the four macromolecules.</p>',
+        '    <p class="subtitle">The pirate crew mixed up the science pantry. Your job is to put each clue back with the right macromolecule.</p>',
+        '  </div>',
+        '  <form id="nameForm" class="panel name-form">',
+        '    <label for="studentName">First Name</label>',
+        '    <input id="studentName" name="studentName" autocomplete="given-name" maxlength="60" placeholder="Enter a name Mr. Patel will recognize">',
+        '    <div id="nameError" class="error-text"></div>',
+        '    <button class="primary-button" type="submit">Start</button>',
+        '  </form>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('nameForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        var name = normalizeName(document.getElementById('studentName').value);
+
+        if (!name) {
+          document.getElementById('nameError').textContent = 'Enter a name Mr. Patel will recognize.';
+          return;
+        }
+
+        startNewAttempt(name);
+        showReviewScreen();
+      });
+    }
+
+    function showResumePrompt(saved) {
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="brand-mark" aria-hidden="true">PP</div>',
+        '  <div class="panel">',
+        '    <h1>Saved Game Found</h1>',
+        '    <p class="subtitle">You have a saved game for ' + escapeHtml(saved.studentName) + '. Continue where you left off?</p>',
+        '    <div class="button-row">',
+        '      <button id="continueSaved" class="primary-button" type="button">Continue Saved Game</button>',
+        '      <button id="startOver" class="secondary-button" type="button">Start Over</button>',
+        '    </div>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('continueSaved').addEventListener('click', function() {
+        state = saved;
+        scheduleSync('resume', true);
+        showGameScreen();
+      });
+
+      document.getElementById('startOver').addEventListener('click', function() {
+        showStartOverConfirm(saved.studentName);
+      });
+    }
+
+    function showStartOverConfirm(name) {
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="panel">',
+        '    <h1>Start Over?</h1>',
+        '    <p class="subtitle">This clears saved progress on this iPad. Your best score already saved in Mr. Patel\'s Sheet will not be deleted.</p>',
+        '    <div class="button-row">',
+        '      <button id="yesStartOver" class="danger-button" type="button">Yes, Start Over</button>',
+        '      <button id="cancelStartOver" class="secondary-button" type="button">Cancel</button>',
+        '    </div>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('yesStartOver').addEventListener('click', function() {
+        clearSavedState();
+        showLanding();
+      });
+
+      document.getElementById('cancelStartOver').addEventListener('click', function() {
+        showResumePrompt(state || { studentName: name });
+      });
+    }
+
+    function showReviewScreen() {
+      render([
+        '<section class="screen">',
+        '  <div class="top-bar">',
+        '    <div>',
+        '      <h1>Quick Review</h1>',
+        '      <p class="subtitle">You can use this chart during the game. It does not lower your score.</p>',
+        '    </div>',
+        '  </div>',
+        '  <div class="review-grid">' + renderReviewItems() + '</div>',
+        '  <div class="button-row">',
+        '    <button id="startGame" class="primary-button" type="button">Start Game</button>',
+        '    <button id="skipReview" class="secondary-button" type="button">Skip Review</button>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('startGame').addEventListener('click', showGameScreen);
+      document.getElementById('skipReview').addEventListener('click', showGameScreen);
+    }
+
+    function showGameScreen() {
+      if (!state.currentQueue || state.currentQueue.length === 0) {
+        startRoundQueue();
+      }
+
+      if (!state.currentCardId) {
+        pickNextCard();
+      }
+
+      renderGameShell();
+      renderCurrentCard();
+    }
+
+    function renderGameShell() {
+      var round = getRoundInfo(state.currentRound);
+
+      render([
+        '<section class="screen">',
+        '  <div class="top-bar">',
+        '    <div>',
+        '      <h1>' + escapeHtml(appData.config.gameTitle) + '</h1>',
+        '      <p class="round-intro">' + escapeHtml(round.intro) + '</p>',
+        '    </div>',
+        '    <button id="openReview" class="secondary-button" type="button">Review Chart</button>',
+        '  </div>',
+        '  <div class="progress-strip">',
+        '    <div class="progress-card">',
+        '      <span>Correct Answers</span>',
+        '      <strong>' + state.totalCorrect + ' / ' + appData.config.targetCorrect + '</strong>',
+        '      <div class="bar"><span style="width:' + progressPercent(state.totalCorrect, appData.config.targetCorrect) + '%"></span></div>',
+        '    </div>',
+        '    <div class="progress-card">',
+        '      <span>Round ' + state.currentRound + ': ' + escapeHtml(round.name) + '</span>',
+        '      <strong>' + getRoundCorrect(state.currentRound) + ' / ' + appData.config.correctPerRound + '</strong>',
+        '      <div class="bar"><span style="width:' + progressPercent(getRoundCorrect(state.currentRound), appData.config.correctPerRound) + '%"></span></div>',
+        '    </div>',
+        '  </div>',
+        '  <section id="questionArea" class="panel question-card"></section>',
+        '  <div id="syncStatus" class="sync-status">' + escapeHtml(state.syncStatus || 'Progress saves automatically.') + '</div>',
+        '  <div class="footer-actions"><button id="resetLocal" class="small-button" type="button">Reset saved game</button></div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('openReview').addEventListener('click', openReviewModal);
+      document.getElementById('resetLocal').addEventListener('click', function() {
+        if (window.confirm('Clear saved progress on this iPad? This will not delete the best score in Mr. Patel\'s Sheet.')) {
+          clearSavedState();
+          showLanding();
+        }
+      });
+    }
+
+    function renderCurrentCard() {
+      currentCard = findQuestionById(state.currentCardId);
+
+      if (!currentCard) {
+        pickNextCard();
+        currentCard = findQuestionById(state.currentCardId);
+      }
+
+      if (!currentCard) {
+        showError('No card is available for this round. Ask Mr. Patel to run setup or check the QuestionBank tab.');
+        return;
+      }
+
+      selectedOptions = [];
+      var area = document.getElementById('questionArea');
+      var isMulti = currentCard.interaction_type === 'multi_select';
+
+      area.innerHTML = [
+        '<div>',
+        '  <p class="round-intro">' + escapeHtml(currentCard.round_name) + '</p>',
+        '  <h2 class="prompt">' + escapeHtml(currentCard.prompt) + '</h2>',
+        '</div>',
+        '<div id="optionGrid" class="option-grid">' + renderOptions(currentCard, isMulti) + '</div>',
+        isMulti ? '<button id="checkAnswer" class="primary-button" type="button" disabled>Check Answer</button>' : '',
+        '<div id="feedback" class="feedback hidden"></div>',
+        '<div class="button-row"><button id="nextCard" class="primary-button hidden" type="button">Continue</button></div>'
+      ].join('');
+
+      Array.prototype.slice.call(area.querySelectorAll('.answer-option')).forEach(function(button) {
+        button.addEventListener('click', function() {
+          handleOptionClick(button, isMulti);
+        });
+      });
+
+      if (isMulti) {
+        document.getElementById('checkAnswer').addEventListener('click', function() {
+          evaluateAnswer();
+        });
+      }
+
+      document.getElementById('nextCard').addEventListener('click', continueAfterFeedback);
+      saveLocalState();
+    }
+
+    function renderOptions(card, isMulti) {
+      return card.options.map(function(option, index) {
+        var typeText = isMulti ? 'button' : 'button';
+        return '<button class="answer-option" type="' + typeText + '" data-option="' + escapeHtml(option) + '">' + escapeHtml(option) + '</button>';
+      }).join('');
+    }
+
+    function handleOptionClick(button, isMulti) {
+      var option = button.getAttribute('data-option');
+
+      if (document.getElementById('feedback') && !document.getElementById('feedback').classList.contains('hidden')) {
+        return;
+      }
+
+      if (!isMulti) {
+        selectedOptions = [option];
+        button.classList.add('selected');
+        evaluateAnswer();
+        return;
+      }
+
+      if (selectedOptions.indexOf(option) === -1) {
+        selectedOptions.push(option);
+        button.classList.add('selected');
+      } else {
+        selectedOptions = selectedOptions.filter(function(item) {
+          return item !== option;
+        });
+        button.classList.remove('selected');
+      }
+
+      document.getElementById('checkAnswer').disabled = selectedOptions.length === 0;
+    }
+
+    function evaluateAnswer() {
+      var isCorrect = isExactMatch(selectedOptions, currentCard.correct);
+      var feedback = document.getElementById('feedback');
+      var optionButtons = Array.prototype.slice.call(document.querySelectorAll('.answer-option'));
+
+      optionButtons.forEach(function(button) {
+        var option = button.getAttribute('data-option');
+        button.disabled = true;
+
+        if (currentCard.correct.indexOf(option) !== -1) {
+          button.classList.add('correct');
+        } else if (selectedOptions.indexOf(option) !== -1) {
+          button.classList.add('incorrect');
+        }
+      });
+
+      if (document.getElementById('checkAnswer')) {
+        document.getElementById('checkAnswer').disabled = true;
+      }
+
+      if (isCorrect) {
+        markCorrect();
+        feedback.textContent = 'Correct. ' + currentCard.explanation;
+        feedback.className = 'feedback correct';
+      } else {
+        markIncorrect();
+        feedback.textContent = 'Not quite. ' + currentCard.explanation;
+        feedback.className = 'feedback incorrect';
+      }
+
+      feedback.classList.remove('hidden');
+      document.getElementById('nextCard').classList.remove('hidden');
+      saveLocalState();
+    }
+
+    function markCorrect() {
+      if (state.answeredCorrectIds.indexOf(currentCard.card_id) === -1) {
+        state.answeredCorrectIds.push(currentCard.card_id);
+        state.totalCorrect += 1;
+        state.roundCorrect[String(state.currentRound)] = getRoundCorrect(state.currentRound) + 1;
+      }
+
+      state.currentCardId = '';
+      state.updatedAt = new Date().toISOString();
+      scheduleSync('correct', false);
+    }
+
+    function markIncorrect() {
+      if (state.missedIds.indexOf(currentCard.card_id) === -1) {
+        state.missedIds.push(currentCard.card_id);
+      }
+
+      addCardBackLater(currentCard.card_id);
+      state.currentCardId = '';
+      state.updatedAt = new Date().toISOString();
+    }
+
+    function continueAfterFeedback() {
+      if (state.totalCorrect >= appData.config.targetCorrect) {
+        completeGame();
+        return;
+      }
+
+      if (getRoundCorrect(state.currentRound) >= appData.config.correctPerRound) {
+        completeRound();
+        return;
+      }
+
+      pickNextCard();
+      renderGameShell();
+      renderCurrentCard();
+    }
+
+    function completeRound() {
+      var round = getRoundInfo(state.currentRound);
+      var nextRound = state.currentRound + 1;
+      scheduleSync('round_complete', true);
+
+      if (nextRound > 4) {
+        completeGame();
+        return;
+      }
+
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="panel">',
+        '    <h1>Round Complete</h1>',
+        '    <p class="subtitle">You finished Round ' + state.currentRound + ': ' + escapeHtml(round.name) + '.</p>',
+        '    <button id="nextRound" class="primary-button" type="button">Start Round ' + nextRound + '</button>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('nextRound').addEventListener('click', function() {
+        state.currentRound = nextRound;
+        state.currentCardId = '';
+        state.currentQueue = [];
+        state.updatedAt = new Date().toISOString();
+        startRoundQueue();
+        saveLocalState();
+        showGameScreen();
+      });
+    }
+
+    function completeGame() {
+      state.completedAt = state.completedAt || new Date().toISOString();
+      state.currentCardId = '';
+      state.updatedAt = new Date().toISOString();
+      saveLocalState();
+      scheduleSync('game_complete', true);
+      showFinalScreen();
+    }
+
+    function showFinalScreen() {
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="brand-mark" aria-hidden="true">PP</div>',
+        '  <div class="panel">',
+        '    <h1>You reached ' + appData.config.targetCorrect + ' correct answers!</h1>',
+        '    <p class="subtitle">Score from this attempt: ' + state.totalCorrect + ' / ' + appData.config.targetCorrect + '</p>',
+        '    <p class="subtitle">Rounds completed: ' + getRoundsCompleted() + ' / 4</p>',
+        '    <p id="syncStatus" class="sync-status">' + escapeHtml(state.syncStatus || 'Your score is saving automatically.') + '</p>',
+        '    <div class="button-row">',
+        '      <button id="playAgain" class="primary-button" type="button">Play Again</button>',
+        '      <button id="reviewFinal" class="secondary-button" type="button">Review Chart</button>',
+        '    </div>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+
+      document.getElementById('playAgain').addEventListener('click', function() {
+        var name = state.studentName;
+        startNewAttempt(name);
+        showReviewScreen();
+      });
+
+      document.getElementById('reviewFinal').addEventListener('click', openReviewModal);
+    }
+
+    function startNewAttempt(name) {
+      state = {
+        studentName: normalizeName(name),
+        studentKey: normalizeName(name).toLowerCase(),
+        attemptId: makeAttemptId(),
+        questionBankVersion: appData.config.questionBankVersion,
+        targetCorrect: appData.config.targetCorrect,
+        correctPerRound: appData.config.correctPerRound,
+        currentRound: 1,
+        totalCorrect: 0,
+        roundCorrect: {
+          1: 0,
+          2: 0,
+          3: 0,
+          4: 0
+        },
+        answeredCorrectIds: [],
+        missedIds: [],
+        currentQueue: [],
+        currentCardId: '',
+        lastServerSyncedCorrect: 0,
+        syncStatus: 'Progress saves automatically.',
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        completedAt: null
+      };
+
+      startRoundQueue();
+      saveLocalState();
+    }
+
+    function startRoundQueue() {
+      var cards = appData.questions.filter(function(card) {
+        return card.round_id === state.currentRound && state.answeredCorrectIds.indexOf(card.card_id) === -1;
+      });
+
+      state.currentQueue = shuffle(cards.map(function(card) {
+        return card.card_id;
+      }));
+    }
+
+    function pickNextCard() {
+      if (!state.currentQueue || state.currentQueue.length === 0) {
+        startRoundQueue();
+      }
+
+      var nextId = state.currentQueue.shift();
+
+      if (nextId === state.lastCardId && state.currentQueue.length > 0) {
+        state.currentQueue.push(nextId);
+        nextId = state.currentQueue.shift();
+      }
+
+      state.currentCardId = nextId || '';
+      state.lastCardId = state.currentCardId;
+      state.updatedAt = new Date().toISOString();
+      saveLocalState();
+    }
+
+    function addCardBackLater(cardId) {
+      var remaining = state.currentQueue || [];
+
+      if (remaining.indexOf(cardId) === -1 && state.answeredCorrectIds.indexOf(cardId) === -1) {
+        if (remaining.length > 1) {
+          remaining.splice(Math.min(remaining.length, 2), 0, cardId);
+        } else {
+          remaining.push(cardId);
+        }
+      }
+
+      state.currentQueue = remaining;
+    }
+
+    function scheduleSync(reason, immediate) {
+      pendingSyncReason = reason || pendingSyncReason || 'progress';
+
+      if (!state || !state.studentName) {
+        return;
+      }
+
+      if (!immediate && state.totalCorrect <= state.lastServerSyncedCorrect) {
+        return;
+      }
+
+      if (syncTimer) {
+        window.clearTimeout(syncTimer);
+      }
+
+      syncTimer = window.setTimeout(function() {
+        syncBestScore(pendingSyncReason);
+      }, immediate ? 50 : 900);
+    }
+
+    function syncBestScore(reason) {
+      if (!state || syncInFlight) {
+        return;
+      }
+
+      syncInFlight = true;
+      state.syncStatus = 'Saving best score to Mr. Patel\'s Sheet...';
+      updateSyncStatus();
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          syncInFlight = false;
+          pendingSyncReason = '';
+
+          if (response && response.success) {
+            state.lastServerSyncedCorrect = Math.max(state.lastServerSyncedCorrect, state.totalCorrect);
+            state.syncStatus = response.saved ? 'Best score saved to Mr. Patel\'s Sheet.' : 'Your best score in the Sheet is already the same or higher.';
+          } else {
+            state.syncStatus = 'Saved on this iPad. Sheet sync will try again after your next correct answer.';
+          }
+
+          saveLocalState();
+          updateSyncStatus();
+        })
+        .withFailureHandler(function(error) {
+          syncInFlight = false;
+          state.syncStatus = 'Saved on this iPad. Sheet sync needs another try.';
+          saveLocalState();
+          updateSyncStatus();
+        })
+        .saveBestScore({
+          studentName: state.studentName,
+          attemptId: state.attemptId,
+          totalCorrect: state.totalCorrect,
+          targetCorrect: state.targetCorrect,
+          currentRound: state.currentRound,
+          roundsCompleted: getRoundsCompleted(),
+          roundCorrect: state.roundCorrect,
+          answeredCorrectCount: state.answeredCorrectIds.length,
+          missedCount: state.missedIds.length,
+          completedAt: state.completedAt,
+          updatedAt: state.updatedAt,
+          reason: reason
+        });
+    }
+
+    function updateSyncStatus() {
+      var status = document.getElementById('syncStatus');
+
+      if (status && state) {
+        status.textContent = state.syncStatus || '';
+      }
+    }
+
+    function openReviewModal() {
+      var modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.innerHTML = [
+        '<section class="modal" role="dialog" aria-modal="true" aria-label="Review Chart">',
+        '  <div class="top-bar">',
+        '    <h2>Review Chart</h2>',
+        '    <button id="closeReview" class="secondary-button" type="button">Close</button>',
+        '  </div>',
+        '  <p class="subtitle">Using this chart does not lower your score.</p>',
+        '  <div class="review-grid">' + renderReviewItems() + '</div>',
+        '</section>'
+      ].join('');
+
+      document.body.appendChild(modal);
+      document.getElementById('closeReview').addEventListener('click', function() {
+        document.body.removeChild(modal);
+      });
+    }
+
+    function renderReviewItems() {
+      return appData.reviewChart.map(function(item) {
+        return [
+          '<article class="review-item">',
+          '  <h3>' + escapeHtml(item.macromolecule) + '</h3>',
+          '  <p class="review-line"><strong>Elements:</strong> ' + escapeHtml(item.elements) + '</p>',
+          '  <p class="review-line"><strong>Building Block:</strong> ' + escapeHtml(item.buildingBlock) + '</p>',
+          '  <p class="review-line"><strong>Main Jobs:</strong> ' + escapeHtml(item.jobs) + '</p>',
+          '  <p class="review-line"><strong>Examples:</strong> ' + escapeHtml(item.examples) + '</p>',
+          '</article>'
+        ].join('');
+      }).join('');
+    }
+
+    function findQuestionById(cardId) {
+      for (var i = 0; i < appData.questions.length; i++) {
+        if (appData.questions[i].card_id === cardId) {
+          return appData.questions[i];
+        }
+      }
+
+      return null;
+    }
+
+    function getRoundInfo(roundId) {
+      for (var i = 0; i < appData.rounds.length; i++) {
+        if (appData.rounds[i].id === roundId) {
+          return appData.rounds[i];
+        }
+      }
+
+      return appData.rounds[0];
+    }
+
+    function getRoundCorrect(roundId) {
+      return Number(state.roundCorrect[String(roundId)] || state.roundCorrect[roundId] || 0);
+    }
+
+    function getRoundsCompleted() {
+      var count = 0;
+
+      [1, 2, 3, 4].forEach(function(roundId) {
+        if (getRoundCorrect(roundId) >= appData.config.correctPerRound) {
+          count++;
+        }
+      });
+
+      return count;
+    }
+
+    function isExactMatch(selected, correct) {
+      if (selected.length !== correct.length) {
+        return false;
+      }
+
+      var selectedSorted = selected.slice().sort();
+      var correctSorted = correct.slice().sort();
+
+      for (var i = 0; i < correctSorted.length; i++) {
+        if (selectedSorted[i] !== correctSorted[i]) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function saveLocalState() {
+      if (!state) {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        state.syncStatus = 'This iPad is blocking local save. Your Sheet score can still save online.';
+      }
+    }
+
+    function loadSavedState() {
+      try {
+        var raw = window.localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function clearSavedState() {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+      }
+    }
+
+    function render(html) {
+      app.innerHTML = html;
+    }
+
+    function showError(message) {
+      render([
+        '<section class="screen center-panel">',
+        '  <div class="panel">',
+        '    <h1>Game Setup Needs Attention</h1>',
+        '    <p class="subtitle">' + escapeHtml(message) + '</p>',
+        '  </div>',
+        '</section>'
+      ].join(''));
+    }
+
+    function getErrorMessage(error) {
+      if (!error) {
+        return '';
+      }
+
+      return error.message || String(error);
+    }
+
+    function normalizeName(value) {
+      return String(value || '').trim().replace(/\s+/g, ' ');
+    }
+
+    function makeAttemptId() {
+      return 'attempt_' + new Date().getTime() + '_' + Math.floor(Math.random() * 100000);
+    }
+
+    function shuffle(items) {
+      var copy = items.slice();
+
+      for (var i = copy.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = temp;
+      }
+
+      return copy;
+    }
+
+    function progressPercent(value, target) {
+      return Math.max(0, Math.min(100, Math.round((Number(value) / Number(target)) * 100)));
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    init();
+  })();
+</script>
