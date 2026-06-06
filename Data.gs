@@ -1,38 +1,45 @@
 function getGameData() {
   var spreadsheet = getBoundSpreadsheet_();
   var config = getConfigMap_(spreadsheet);
-  var targetCorrect = toPositiveNumber_(config.target_correct, 32);
-  var correctPerRound = toPositiveNumber_(config.correct_per_round, 8);
+  var settings = getValidatedGameSettings_(config);
   var questions = getActiveQuestionBank_(spreadsheet);
-  var validation = validateQuestionBank_(questions, correctPerRound);
+  var validation = validateQuestionBank_(questions, settings.correctPerRound);
+  var setupErrors = settings.errors.concat(validation.errors);
 
-  if (validation.errors.length > 0) {
-    throw new Error('QuestionBank needs attention before students play: ' + validation.errors.join(' | '));
+  if (setupErrors.length > 0) {
+    throw new Error('Game setup needs attention before students play: ' + setupErrors.join(' | '));
   }
 
   return {
     success: true,
     config: {
       gameTitle: config.game_title || APP_TITLE,
-      targetCorrect: targetCorrect,
-      correctPerRound: correctPerRound,
-      allowReviewChart: parseBoolean_(config.allow_review_chart, true),
-      allowReplay: parseBoolean_(config.allow_replay, true),
-      questionBankVersion: String(config.question_bank_version || '1')
+      targetCorrect: settings.targetCorrect,
+      correctPerRound: settings.correctPerRound,
+      allowReviewChart: settings.allowReviewChart,
+      allowReplay: settings.allowReplay,
+      questionBankVersion: settings.questionBankVersion
     },
     rounds: getRoundInfo_(),
     questions: questions,
     reviewChart: getReviewChartData_(),
-    warnings: validation.warnings
+    warnings: settings.warnings.concat(validation.warnings)
   };
 }
 
 function saveBestScore(payload) {
   var spreadsheet = getBoundSpreadsheet_();
   var config = getConfigMap_(spreadsheet);
-  var targetCorrect = toPositiveNumber_(config.target_correct, 32);
-  var correctPerRound = toPositiveNumber_(config.correct_per_round, 8);
-  var cleanedPayload = validateScorePayload_(payload, targetCorrect);
+  var settings = getValidatedGameSettings_(config);
+  var questions = getActiveQuestionBank_(spreadsheet);
+  var validation = validateQuestionBank_(questions, settings.correctPerRound);
+  var setupErrors = settings.errors.concat(validation.errors);
+
+  if (setupErrors.length > 0) {
+    throw new Error('Game setup needs attention before scores can save: ' + setupErrors.join(' | '));
+  }
+
+  var cleanedPayload = validateScorePayload_(payload, settings.targetCorrect, settings.correctPerRound, questions);
   var normalized = normalizeStudentName_(cleanedPayload.studentName);
   var lock = LockService.getScriptLock();
 
@@ -53,26 +60,24 @@ function saveBestScore(payload) {
         message: 'Existing best score is the same or higher.',
         previousBestCorrect: previousBest,
         bestCorrect: previousBest,
-        gradePercent: calculateGrade_(previousBest, targetCorrect)
+        gradePercent: calculateGrade_(previousBest, settings.targetCorrect)
       };
     }
 
-    var bestCorrect = Math.max(0, Math.min(targetCorrect, newBestCorrect));
-    var gradePercent = calculateGrade_(bestCorrect, targetCorrect);
-    var completed = bestCorrect >= targetCorrect;
+    var bestCorrect = Math.max(0, Math.min(settings.targetCorrect, newBestCorrect));
+    var gradePercent = calculateGrade_(bestCorrect, settings.targetCorrect);
+    var completed = bestCorrect >= settings.targetCorrect;
     var completedAt = completed ? (rowInfo.rowValues.completed_at || cleanedPayload.completedAt || now) : '';
-    var roundsCompleted = cleanedPayload.roundsCompleted;
-
-    if (roundsCompleted === null) {
-      roundsCompleted = calculateRoundsCompleted_(cleanedPayload.roundCorrect, correctPerRound);
-    }
+    var roundsCompleted = calculateRoundsCompleted_(cleanedPayload.roundCorrect, settings.correctPerRound);
 
     var summary = {
       attemptId: cleanedPayload.attemptId,
       totalCorrect: bestCorrect,
       currentRound: cleanedPayload.currentRound,
       roundsCompleted: roundsCompleted,
-      answeredCorrectCount: cleanedPayload.answeredCorrectCount,
+      acceptedAnsweredCorrectCount: cleanedPayload.answeredCorrectIds.length,
+      ignoredAnsweredCorrectCount: cleanedPayload.ignoredAnsweredCorrectCount,
+      clientReportedCorrect: cleanedPayload.clientReportedCorrect,
       missedCount: cleanedPayload.missedCount,
       reason: cleanedPayload.reason || '',
       clientUpdatedAt: cleanedPayload.updatedAt || ''
@@ -82,7 +87,7 @@ function saveBestScore(payload) {
       normalized.key,
       normalized.displayName,
       bestCorrect,
-      targetCorrect,
+      settings.targetCorrect,
       gradePercent,
       gradePercent,
       completed,
@@ -116,7 +121,11 @@ function normalizeStudentName_(name) {
   var displayName = String(name || '').trim().replace(/\s+/g, ' ');
 
   if (!displayName) {
-    throw new Error('Enter a name Mr. Patel will recognize.');
+    throw new Error('Enter your first and last name.');
+  }
+
+  if (displayName.split(' ').length < 2) {
+    throw new Error('Enter first and last name, or first name plus last initial.');
   }
 
   return {
@@ -143,6 +152,28 @@ function getConfigMap_(spreadsheet) {
   });
 
   return config;
+}
+
+function getValidatedGameSettings_(config) {
+  var errors = [];
+  var warnings = [];
+  var targetCorrect = parsePositiveIntegerConfig_(config.target_correct, 32, 'target_correct', errors);
+  var correctPerRound = parsePositiveIntegerConfig_(config.correct_per_round, 8, 'correct_per_round', errors);
+  var expectedTarget = correctPerRound * 4;
+
+  if (targetCorrect !== expectedTarget) {
+    errors.push('Config target_correct must equal correct_per_round x 4 rounds. Current values make ' + targetCorrect + ' instead of ' + expectedTarget + '.');
+  }
+
+  return {
+    targetCorrect: targetCorrect,
+    correctPerRound: correctPerRound,
+    allowReviewChart: parseBoolean_(config.allow_review_chart, true),
+    allowReplay: parseBoolean_(config.allow_replay, true),
+    questionBankVersion: String(config.question_bank_version || '1'),
+    errors: errors,
+    warnings: warnings
+  };
 }
 
 function getActiveQuestionBank_(spreadsheet) {
@@ -210,7 +241,29 @@ function validateQuestionBank_(questions, correctPerRound) {
       errors.push(question.card_id + ' needs at least one correct answer.');
     }
 
+    if (question.interaction_type === 'single_choice' && question.correct.length !== 1) {
+      errors.push(question.card_id + ' is single_choice, so correct_json must contain exactly one answer.');
+    }
+
+    findDuplicateValues_(question.options).forEach(function(option) {
+      errors.push(question.card_id + ' has a duplicate option: ' + option);
+    });
+
+    findDuplicateValues_(question.correct).forEach(function(answer) {
+      errors.push(question.card_id + ' has a duplicate correct answer: ' + answer);
+    });
+
+    question.options.forEach(function(option) {
+      if (!String(option || '').trim()) {
+        errors.push(question.card_id + ' has a blank option.');
+      }
+    });
+
     question.correct.forEach(function(answer) {
+      if (!String(answer || '').trim()) {
+        errors.push(question.card_id + ' has a blank correct answer.');
+      }
+
       if (question.options.indexOf(answer) === -1) {
         errors.push(question.card_id + ' has a correct answer that is not in options_json: ' + answer);
       }
@@ -239,39 +292,87 @@ function validateQuestionBank_(questions, correctPerRound) {
   };
 }
 
-function validateScorePayload_(payload, targetCorrect) {
+function validateScorePayload_(payload, targetCorrect, correctPerRound, questions) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Score payload is missing.');
   }
 
   var normalized = normalizeStudentName_(payload.studentName);
+  var acceptedScore = calculateAcceptedScoreFromPayload_(payload.answeredCorrectIds, questions, correctPerRound, targetCorrect);
   var rawCorrect = Number(payload.totalCorrect);
-
-  if (!isFinite(rawCorrect)) {
-    rawCorrect = Number(payload.bestCorrect);
-  }
+  var currentRound = Math.floor(Number(payload.currentRound) || 1);
+  currentRound = Math.max(1, Math.min(4, currentRound));
 
   if (!isFinite(rawCorrect)) {
     rawCorrect = 0;
   }
 
-  var bestCorrect = Math.floor(Math.max(0, Math.min(targetCorrect, rawCorrect)));
-  var currentRound = Math.floor(Number(payload.currentRound) || 1);
-  currentRound = Math.max(1, Math.min(4, currentRound));
-
   return {
     studentName: normalized.displayName,
-    bestCorrect: bestCorrect,
+    bestCorrect: acceptedScore.bestCorrect,
     currentRound: currentRound,
-    roundsCompleted: payload.roundsCompleted === null || payload.roundsCompleted === undefined ? null : Math.max(0, Math.min(4, Math.floor(Number(payload.roundsCompleted) || 0))),
-    roundCorrect: payload.roundCorrect || {},
+    roundCorrect: acceptedScore.roundCorrect,
     attemptId: String(payload.attemptId || ''),
-    answeredCorrectCount: Math.max(0, Math.floor(Number(payload.answeredCorrectCount) || 0)),
+    answeredCorrectIds: acceptedScore.acceptedIds,
+    ignoredAnsweredCorrectCount: acceptedScore.ignoredCount,
+    clientReportedCorrect: Math.max(0, Math.floor(rawCorrect)),
     missedCount: Math.max(0, Math.floor(Number(payload.missedCount) || 0)),
     completedAt: payload.completedAt || '',
     updatedAt: payload.updatedAt || '',
     reason: String(payload.reason || '')
   };
+}
+
+function calculateAcceptedScoreFromPayload_(answeredCorrectIds, questions, correctPerRound, targetCorrect) {
+  var lookup = buildQuestionLookup_(questions);
+  var ids = Array.isArray(answeredCorrectIds) ? answeredCorrectIds : [];
+  var seen = {};
+  var acceptedIds = [];
+  var ignoredCount = 0;
+  var roundCounts = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0
+  };
+
+  ids.forEach(function(value) {
+    var cardId = String(value || '').trim();
+
+    if (!cardId || seen[cardId] || !lookup[cardId]) {
+      ignoredCount++;
+      return;
+    }
+
+    seen[cardId] = true;
+    acceptedIds.push(cardId);
+    roundCounts[String(lookup[cardId].round_id)]++;
+  });
+
+  var roundCorrect = {
+    1: Math.min(correctPerRound, roundCounts[1] || 0),
+    2: Math.min(correctPerRound, roundCounts[2] || 0),
+    3: Math.min(correctPerRound, roundCounts[3] || 0),
+    4: Math.min(correctPerRound, roundCounts[4] || 0)
+  };
+  var bestCorrect = Math.min(targetCorrect, roundCorrect[1] + roundCorrect[2] + roundCorrect[3] + roundCorrect[4]);
+
+  return {
+    acceptedIds: acceptedIds,
+    ignoredCount: ignoredCount,
+    roundCorrect: roundCorrect,
+    bestCorrect: bestCorrect
+  };
+}
+
+function buildQuestionLookup_(questions) {
+  var lookup = {};
+
+  questions.forEach(function(question) {
+    lookup[question.card_id] = question;
+  });
+
+  return lookup;
 }
 
 function findBestScoreRow_(sheet, studentKey) {
@@ -367,6 +468,21 @@ function parseBoolean_(value, defaultValue) {
   return defaultValue;
 }
 
+function parsePositiveIntegerConfig_(value, fallback, key, errors) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return fallback;
+  }
+
+  var number = Number(value);
+
+  if (!isFinite(number) || number <= 0 || Math.floor(number) !== number) {
+    errors.push('Config ' + key + ' must be a whole number greater than 0.');
+    return fallback;
+  }
+
+  return number;
+}
+
 function toPositiveNumber_(value, fallback) {
   var number = Number(value);
 
@@ -375,6 +491,27 @@ function toPositiveNumber_(value, fallback) {
   }
 
   return number;
+}
+
+function findDuplicateValues_(values) {
+  var seen = {};
+  var duplicates = {};
+
+  values.forEach(function(value) {
+    var text = String(value || '').trim();
+
+    if (!text) {
+      return;
+    }
+
+    if (seen[text]) {
+      duplicates[text] = true;
+    }
+
+    seen[text] = true;
+  });
+
+  return Object.keys(duplicates);
 }
 
 function calculateRoundsCompleted_(roundCorrect, correctPerRound) {

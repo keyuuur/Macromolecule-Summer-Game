@@ -110,6 +110,7 @@
     max-width: 680px;
     font-size: 1.12rem;
     line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 
   .panel {
@@ -264,6 +265,14 @@
     font-size: clamp(1.5rem, 3vw, 2.25rem);
     line-height: 1.18;
     font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  .selection-hint {
+    margin-top: 10px;
+    color: var(--deck-dark);
+    font-weight: 700;
+    line-height: 1.35;
   }
 
   .option-grid {
@@ -280,6 +289,8 @@
     color: var(--ink);
     background: var(--white);
     font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
     text-align: center;
   }
 
@@ -304,6 +315,19 @@
     color: var(--white);
     background: var(--red);
     border-color: #8f3027;
+  }
+
+  .answer-option.missed-correct {
+    color: var(--ink);
+    background: #fff4d6;
+    border-color: var(--gold);
+  }
+
+  .answer-status {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.82rem;
+    font-weight: 800;
   }
 
   .feedback {
@@ -345,6 +369,7 @@
   .review-line {
     margin: 6px 0;
     line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .review-line strong {
@@ -387,7 +412,7 @@
     padding-bottom: 14px;
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 900px) {
     .app-shell {
       padding: 18px 12px;
     }

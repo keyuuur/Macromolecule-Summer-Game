@@ -1,6 +1,7 @@
 <script>
   (function() {
     var STORAGE_KEY = 'piratePantryStateV1';
+    var PENDING_SYNC_KEY = 'piratePantryPendingSyncV1';
     var app = document.getElementById('app');
     var appData = null;
     var state = null;
@@ -8,7 +9,8 @@
     var selectedOptions = [];
     var syncTimer = null;
     var syncInFlight = false;
-    var pendingSyncReason = '';
+    var queuedSyncPayload = null;
+    var activeSyncPayload = null;
 
     function init() {
       google.script.run
@@ -24,10 +26,28 @@
 
     function showStartingScreen() {
       var saved = loadSavedState();
+      var pending = loadPendingSyncPayload();
 
-      if (saved && saved.questionBankVersion === appData.config.questionBankVersion && saved.totalCorrect < appData.config.targetCorrect) {
+      if (pending && pending.questionBankVersion === appData.config.questionBankVersion) {
+        syncBestScore(pending);
+      }
+
+      if (saved && saved.questionBankVersion === appData.config.questionBankVersion) {
         state = saved;
-        showResumePrompt(saved);
+
+        if (state.totalCorrect >= appData.config.targetCorrect) {
+          if (hasUnsyncedProgress(state)) {
+            state.syncStatus = 'Completed score found on this iPad. Saving to Mr. Patel\'s Sheet...';
+            queueScoreSync(makeScorePayload('resume_completed', state), true);
+            showFinalScreen();
+            return;
+          }
+
+          showLanding();
+          return;
+        }
+
+        showResumePrompt(state);
         return;
       }
 
@@ -46,8 +66,8 @@
         '    <p class="subtitle">The pirate crew mixed up the science pantry. Your job is to put each clue back with the right macromolecule.</p>',
         '  </div>',
         '  <form id="nameForm" class="panel name-form">',
-        '    <label for="studentName">First Name</label>',
-        '    <input id="studentName" name="studentName" autocomplete="given-name" maxlength="60" placeholder="Enter a name Mr. Patel will recognize">',
+        '    <label for="studentName">First and Last Name</label>',
+        '    <input id="studentName" name="studentName" autocomplete="name" maxlength="80" placeholder="Example: Maya Johnson">',
         '    <div id="nameError" class="error-text"></div>',
         '    <button class="primary-button" type="submit">Start</button>',
         '  </form>',
@@ -58,13 +78,13 @@
         event.preventDefault();
         var name = normalizeName(document.getElementById('studentName').value);
 
-        if (!name) {
-          document.getElementById('nameError').textContent = 'Enter a name Mr. Patel will recognize.';
+        if (!isRecognizableName(name)) {
+          document.getElementById('nameError').textContent = 'Enter first and last name, or first name plus last initial.';
           return;
         }
 
         startNewAttempt(name);
-        showReviewScreen();
+        showFirstGameStep();
       });
     }
 
@@ -119,6 +139,11 @@
     }
 
     function showReviewScreen() {
+      if (!appData.config.allowReviewChart) {
+        showGameScreen();
+        return;
+      }
+
       render([
         '<section class="screen">',
         '  <div class="top-bar">',
@@ -139,6 +164,14 @@
       document.getElementById('skipReview').addEventListener('click', showGameScreen);
     }
 
+    function showFirstGameStep() {
+      if (appData.config.allowReviewChart) {
+        showReviewScreen();
+      } else {
+        showGameScreen();
+      }
+    }
+
     function showGameScreen() {
       if (!state.currentQueue || state.currentQueue.length === 0) {
         startRoundQueue();
@@ -154,6 +187,7 @@
 
     function renderGameShell() {
       var round = getRoundInfo(state.currentRound);
+      var reviewButton = appData.config.allowReviewChart ? '<button id="openReview" class="secondary-button" type="button">Review Chart</button>' : '';
 
       render([
         '<section class="screen">',
@@ -162,7 +196,7 @@
         '      <h1>' + escapeHtml(appData.config.gameTitle) + '</h1>',
         '      <p class="round-intro">' + escapeHtml(round.intro) + '</p>',
         '    </div>',
-        '    <button id="openReview" class="secondary-button" type="button">Review Chart</button>',
+        '    ' + reviewButton,
         '  </div>',
         '  <div class="progress-strip">',
         '    <div class="progress-card">',
@@ -182,7 +216,10 @@
         '</section>'
       ].join(''));
 
-      document.getElementById('openReview').addEventListener('click', openReviewModal);
+      if (document.getElementById('openReview')) {
+        document.getElementById('openReview').addEventListener('click', openReviewModal);
+      }
+
       document.getElementById('resetLocal').addEventListener('click', function() {
         if (window.confirm('Clear saved progress on this iPad? This will not delete the best score in Mr. Patel\'s Sheet.')) {
           clearSavedState();
@@ -212,6 +249,7 @@
         '<div>',
         '  <p class="round-intro">' + escapeHtml(currentCard.round_name) + '</p>',
         '  <h2 class="prompt">' + escapeHtml(currentCard.prompt) + '</h2>',
+        isMulti ? '  <p id="selectionHint" class="selection-hint">Choose ' + currentCard.correct.length + ' answers. Selected: 0 of ' + currentCard.correct.length + '.</p>' : '',
         '</div>',
         '<div id="optionGrid" class="option-grid">' + renderOptions(currentCard, isMulti) + '</div>',
         isMulti ? '<button id="checkAnswer" class="primary-button" type="button" disabled>Check Answer</button>' : '',
@@ -237,8 +275,8 @@
 
     function renderOptions(card, isMulti) {
       return card.options.map(function(option, index) {
-        var typeText = isMulti ? 'button' : 'button';
-        return '<button class="answer-option" type="' + typeText + '" data-option="' + escapeHtml(option) + '">' + escapeHtml(option) + '</button>';
+        var pressed = isMulti ? ' aria-pressed="false"' : '';
+        return '<button class="answer-option" type="button" data-option="' + escapeHtml(option) + '"' + pressed + '>' + escapeHtml(option) + '</button>';
       }).join('');
     }
 
@@ -259,14 +297,25 @@
       if (selectedOptions.indexOf(option) === -1) {
         selectedOptions.push(option);
         button.classList.add('selected');
+        button.setAttribute('aria-pressed', 'true');
       } else {
         selectedOptions = selectedOptions.filter(function(item) {
           return item !== option;
         });
         button.classList.remove('selected');
+        button.setAttribute('aria-pressed', 'false');
       }
 
-      document.getElementById('checkAnswer').disabled = selectedOptions.length === 0;
+      updateSelectionHint();
+      document.getElementById('checkAnswer').disabled = selectedOptions.length !== currentCard.correct.length;
+    }
+
+    function updateSelectionHint() {
+      var hint = document.getElementById('selectionHint');
+
+      if (hint && currentCard) {
+        hint.textContent = 'Choose ' + currentCard.correct.length + ' answers. Selected: ' + selectedOptions.length + ' of ' + currentCard.correct.length + '.';
+      }
     }
 
     function evaluateAnswer() {
@@ -276,12 +325,22 @@
 
       optionButtons.forEach(function(button) {
         var option = button.getAttribute('data-option');
+        var isCorrectOption = currentCard.correct.indexOf(option) !== -1;
+        var wasSelected = selectedOptions.indexOf(option) !== -1;
         button.disabled = true;
 
-        if (currentCard.correct.indexOf(option) !== -1) {
+        if (isCorrectOption && wasSelected) {
           button.classList.add('correct');
-        } else if (selectedOptions.indexOf(option) !== -1) {
+          button.innerHTML = escapeHtml(option) + '<span class="answer-status">Correct pick</span>';
+          button.setAttribute('aria-label', option + ': correct pick');
+        } else if (isCorrectOption) {
+          button.classList.add('missed-correct');
+          button.innerHTML = escapeHtml(option) + '<span class="answer-status">Needed</span>';
+          button.setAttribute('aria-label', option + ': correct answer needed');
+        } else if (wasSelected) {
           button.classList.add('incorrect');
+          button.innerHTML = escapeHtml(option) + '<span class="answer-status">Not part of answer</span>';
+          button.setAttribute('aria-label', option + ': not part of the answer');
         }
       });
 
@@ -295,7 +354,9 @@
         feedback.className = 'feedback correct';
       } else {
         markIncorrect();
-        feedback.textContent = 'Not quite. ' + currentCard.explanation;
+        feedback.textContent = currentCard.interaction_type === 'multi_select'
+          ? 'Not quite. You needed exactly ' + currentCard.correct.length + ' answers. ' + currentCard.explanation
+          : 'Not quite. ' + currentCard.explanation;
         feedback.className = 'feedback incorrect';
       }
 
@@ -383,6 +444,22 @@
     }
 
     function showFinalScreen() {
+      var scorePending = hasPendingSyncForState(state) || hasUnsyncedProgress(state);
+      var scoreSaving = isSyncBusyForState(state);
+      var buttons = [];
+
+      if (appData.config.allowReplay) {
+        buttons.push('<button id="playAgain" class="primary-button" type="button"' + (scorePending ? ' disabled' : '') + '>Play Again</button>');
+      }
+
+      if (scorePending) {
+        buttons.push('<button id="retrySync" class="secondary-button" type="button"' + (scoreSaving ? ' disabled' : '') + '>Try Saving Again</button>');
+      }
+
+      if (appData.config.allowReviewChart) {
+        buttons.push('<button id="reviewFinal" class="secondary-button" type="button">Review Chart</button>');
+      }
+
       render([
         '<section class="screen center-panel">',
         '  <div class="brand-mark" aria-hidden="true">PP</div>',
@@ -391,21 +468,37 @@
         '    <p class="subtitle">Score from this attempt: ' + state.totalCorrect + ' / ' + appData.config.targetCorrect + '</p>',
         '    <p class="subtitle">Rounds completed: ' + getRoundsCompleted() + ' / 4</p>',
         '    <p id="syncStatus" class="sync-status">' + escapeHtml(state.syncStatus || 'Your score is saving automatically.') + '</p>',
+        scorePending && appData.config.allowReplay ? '    <p id="playAgainNotice" class="sync-status">Play Again unlocks after this score reaches the Sheet.</p>' : '',
         '    <div class="button-row">',
-        '      <button id="playAgain" class="primary-button" type="button">Play Again</button>',
-        '      <button id="reviewFinal" class="secondary-button" type="button">Review Chart</button>',
+        '      ' + buttons.join(''),
         '    </div>',
         '  </div>',
         '</section>'
       ].join(''));
 
-      document.getElementById('playAgain').addEventListener('click', function() {
-        var name = state.studentName;
-        startNewAttempt(name);
-        showReviewScreen();
-      });
+      if (document.getElementById('playAgain')) {
+        document.getElementById('playAgain').addEventListener('click', function() {
+          if (hasPendingSyncForState(state) || hasUnsyncedProgress(state)) {
+            state.syncStatus = 'Save this score first, then Play Again will unlock.';
+            updateSyncStatus();
+            return;
+          }
 
-      document.getElementById('reviewFinal').addEventListener('click', openReviewModal);
+          var name = state.studentName;
+          startNewAttempt(name);
+          showFirstGameStep();
+        });
+      }
+
+      if (document.getElementById('retrySync')) {
+        document.getElementById('retrySync').addEventListener('click', function() {
+          queueScoreSync(makeScorePayload('manual_retry', state), true);
+        });
+      }
+
+      if (document.getElementById('reviewFinal')) {
+        document.getElementById('reviewFinal').addEventListener('click', openReviewModal);
+      }
     }
 
     function startNewAttempt(name) {
@@ -482,8 +575,6 @@
     }
 
     function scheduleSync(reason, immediate) {
-      pendingSyncReason = reason || pendingSyncReason || 'progress';
-
       if (!state || !state.studentName) {
         return;
       }
@@ -492,59 +583,70 @@
         return;
       }
 
+      queueScoreSync(makeScorePayload(reason || 'progress', state), immediate);
+    }
+
+    function queueScoreSync(payload, immediate) {
+      if (!payload) {
+        return;
+      }
+
+      queuedSyncPayload = payload;
+      savePendingSyncPayload(payload);
+
       if (syncTimer) {
         window.clearTimeout(syncTimer);
       }
 
       syncTimer = window.setTimeout(function() {
-        syncBestScore(pendingSyncReason);
+        var nextPayload = queuedSyncPayload;
+        queuedSyncPayload = null;
+        syncBestScore(nextPayload);
       }, immediate ? 50 : 900);
     }
 
-    function syncBestScore(reason) {
-      if (!state || syncInFlight) {
+    function syncBestScore(payload) {
+      if (!payload) {
+        return;
+      }
+
+      if (syncInFlight) {
+        queuedSyncPayload = chooseHigherPayload(queuedSyncPayload, payload);
+        savePendingSyncPayload(queuedSyncPayload);
         return;
       }
 
       syncInFlight = true;
-      state.syncStatus = 'Saving best score to Mr. Patel\'s Sheet...';
+      activeSyncPayload = payload;
+      applySyncStatusToCurrentState(payload, 'Saving best score to Mr. Patel\'s Sheet...');
       updateSyncStatus();
 
       google.script.run
         .withSuccessHandler(function(response) {
           syncInFlight = false;
-          pendingSyncReason = '';
+          activeSyncPayload = null;
 
           if (response && response.success) {
-            state.lastServerSyncedCorrect = Math.max(state.lastServerSyncedCorrect, state.totalCorrect);
-            state.syncStatus = response.saved ? 'Best score saved to Mr. Patel\'s Sheet.' : 'Your best score in the Sheet is already the same or higher.';
+            markPayloadSynced(payload, response);
+            applySyncStatusToCurrentState(payload, response.saved ? 'Best score saved to Mr. Patel\'s Sheet.' : 'Your best score in the Sheet is already the same or higher.');
           } else {
-            state.syncStatus = 'Saved on this iPad. Sheet sync will try again after your next correct answer.';
+            applySyncStatusToCurrentState(payload, 'Saved on this iPad. Sheet sync needs another try.');
           }
 
           saveLocalState();
           updateSyncStatus();
+          syncQueuedPayloadIfNeeded();
         })
         .withFailureHandler(function(error) {
           syncInFlight = false;
-          state.syncStatus = 'Saved on this iPad. Sheet sync needs another try.';
+          activeSyncPayload = null;
+          savePendingSyncPayload(payload);
+          applySyncStatusToCurrentState(payload, 'Saved on this iPad. Sheet sync needs another try.');
           saveLocalState();
           updateSyncStatus();
+          syncQueuedPayloadIfNeeded();
         })
-        .saveBestScore({
-          studentName: state.studentName,
-          attemptId: state.attemptId,
-          totalCorrect: state.totalCorrect,
-          targetCorrect: state.targetCorrect,
-          currentRound: state.currentRound,
-          roundsCompleted: getRoundsCompleted(),
-          roundCorrect: state.roundCorrect,
-          answeredCorrectCount: state.answeredCorrectIds.length,
-          missedCount: state.missedIds.length,
-          completedAt: state.completedAt,
-          updatedAt: state.updatedAt,
-          reason: reason
-        });
+        .saveBestScore(payload);
     }
 
     function updateSyncStatus() {
@@ -553,10 +655,146 @@
       if (status && state) {
         status.textContent = state.syncStatus || '';
       }
+
+      updateFinalScreenControls();
+    }
+
+    function syncQueuedPayloadIfNeeded() {
+      var nextPayload = queuedSyncPayload;
+      queuedSyncPayload = null;
+
+      if (nextPayload) {
+        window.setTimeout(function() {
+          syncBestScore(nextPayload);
+        }, 300);
+      }
+    }
+
+    function makeScorePayload(reason, sourceState) {
+      var snapshot = sourceState || state;
+
+      return {
+        studentName: snapshot.studentName,
+        attemptId: snapshot.attemptId,
+        questionBankVersion: snapshot.questionBankVersion,
+        totalCorrect: Number(snapshot.totalCorrect) || 0,
+        targetCorrect: Number(snapshot.targetCorrect) || appData.config.targetCorrect,
+        currentRound: Number(snapshot.currentRound) || 1,
+        roundsCompleted: getRoundsCompletedForState(snapshot),
+        roundCorrect: cloneRoundCorrect(snapshot.roundCorrect),
+        answeredCorrectIds: (snapshot.answeredCorrectIds || []).slice(),
+        answeredCorrectCount: (snapshot.answeredCorrectIds || []).length,
+        missedCount: (snapshot.missedIds || []).length,
+        completedAt: snapshot.completedAt,
+        updatedAt: snapshot.updatedAt || new Date().toISOString(),
+        reason: reason || 'progress'
+      };
+    }
+
+    function chooseHigherPayload(currentPayload, newPayload) {
+      if (!currentPayload) {
+        return newPayload;
+      }
+
+      return Number(newPayload.totalCorrect || 0) >= Number(currentPayload.totalCorrect || 0) ? newPayload : currentPayload;
+    }
+
+    function applySyncStatusToCurrentState(payload, message) {
+      if (state && payloadBelongsToState(payload, state)) {
+        state.syncStatus = message;
+      }
+    }
+
+    function markPayloadSynced(payload, response) {
+      var bestCorrect = Number(response.bestCorrect || payload.totalCorrect || 0);
+
+      if (state && payloadBelongsToState(payload, state)) {
+        state.lastServerSyncedCorrect = Math.max(Number(state.lastServerSyncedCorrect || 0), bestCorrect);
+      }
+
+      clearPendingSyncPayloadIfCovered(payload, bestCorrect);
+    }
+
+    function payloadBelongsToState(payload, sourceState) {
+      return payload
+        && sourceState
+        && payload.studentName === sourceState.studentName
+        && payload.attemptId === sourceState.attemptId;
+    }
+
+    function hasUnsyncedProgress(sourceState) {
+      if (!sourceState) {
+        return false;
+      }
+
+      return Number(sourceState.totalCorrect || 0) > Number(sourceState.lastServerSyncedCorrect || 0);
+    }
+
+    function hasPendingSyncForState(sourceState) {
+      var pending = loadPendingSyncPayload();
+
+      return !!(pending && payloadBelongsToState(pending, sourceState));
+    }
+
+    function isSyncBusyForState(sourceState) {
+      return payloadBelongsToState(activeSyncPayload, sourceState) || payloadBelongsToState(queuedSyncPayload, sourceState);
+    }
+
+    function savePendingSyncPayload(payload) {
+      try {
+        window.localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(payload));
+      } catch (error) {
+      }
+    }
+
+    function loadPendingSyncPayload() {
+      try {
+        var raw = window.localStorage.getItem(PENDING_SYNC_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function clearPendingSyncPayloadIfCovered(payload, bestCorrect) {
+      var pending = loadPendingSyncPayload();
+
+      if (pending && payloadBelongsToState(pending, payload) && Number(pending.totalCorrect || 0) <= Number(bestCorrect || 0)) {
+        try {
+          window.localStorage.removeItem(PENDING_SYNC_KEY);
+        } catch (error) {
+        }
+      }
+    }
+
+    function updateFinalScreenControls() {
+      var playAgain = document.getElementById('playAgain');
+      var retrySync = document.getElementById('retrySync');
+      var notice = document.getElementById('playAgainNotice');
+      var scorePending = state && (hasPendingSyncForState(state) || hasUnsyncedProgress(state));
+      var scoreSaving = state && isSyncBusyForState(state);
+
+      if (playAgain) {
+        playAgain.disabled = !!scorePending;
+      }
+
+      if (retrySync) {
+        retrySync.classList.toggle('hidden', !scorePending);
+        retrySync.disabled = !!scoreSaving;
+      }
+
+      if (notice) {
+        notice.textContent = scorePending ? (scoreSaving ? 'Saving now. Play Again unlocks after this score reaches the Sheet.' : 'Play Again unlocks after this score reaches the Sheet.') : '';
+      }
     }
 
     function openReviewModal() {
+      if (!appData.config.allowReviewChart) {
+        return;
+      }
+
       var modal = document.createElement('div');
+      var previousFocus = document.activeElement;
       modal.className = 'modal-backdrop';
       modal.innerHTML = [
         '<section class="modal" role="dialog" aria-modal="true" aria-label="Review Chart">',
@@ -570,9 +808,34 @@
       ].join('');
 
       document.body.appendChild(modal);
-      document.getElementById('closeReview').addEventListener('click', function() {
+
+      function closeModal() {
+        document.removeEventListener('keydown', handleModalKeydown);
         document.body.removeChild(modal);
+        if (previousFocus && previousFocus.focus) {
+          previousFocus.focus();
+        }
+      }
+
+      function handleModalKeydown(event) {
+        if (event.key === 'Escape') {
+          closeModal();
+          return;
+        }
+
+        if (event.key === 'Tab') {
+          trapFocus(modal, event);
+        }
+      }
+
+      document.getElementById('closeReview').addEventListener('click', closeModal);
+      modal.addEventListener('click', function(event) {
+        if (event.target === modal) {
+          closeModal();
+        }
       });
+      document.addEventListener('keydown', handleModalKeydown);
+      document.getElementById('closeReview').focus();
     }
 
     function renderReviewItems() {
@@ -614,15 +877,30 @@
     }
 
     function getRoundsCompleted() {
+      return getRoundsCompletedForState(state);
+    }
+
+    function getRoundsCompletedForState(sourceState) {
       var count = 0;
 
       [1, 2, 3, 4].forEach(function(roundId) {
-        if (getRoundCorrect(roundId) >= appData.config.correctPerRound) {
+        var roundCorrect = Number((sourceState.roundCorrect || {})[String(roundId)] || (sourceState.roundCorrect || {})[roundId] || 0);
+
+        if (roundCorrect >= appData.config.correctPerRound) {
           count++;
         }
       });
 
       return count;
+    }
+
+    function cloneRoundCorrect(roundCorrect) {
+      return {
+        1: Number((roundCorrect || {})['1'] || (roundCorrect || {})[1] || 0),
+        2: Number((roundCorrect || {})['2'] || (roundCorrect || {})[2] || 0),
+        3: Number((roundCorrect || {})['3'] || (roundCorrect || {})[3] || 0),
+        4: Number((roundCorrect || {})['4'] || (roundCorrect || {})[4] || 0)
+      };
     }
 
     function isExactMatch(selected, correct) {
@@ -672,6 +950,7 @@
 
     function render(html) {
       app.innerHTML = html;
+      moveFocusToScreenTitle();
     }
 
     function showError(message) {
@@ -695,6 +974,43 @@
 
     function normalizeName(value) {
       return String(value || '').trim().replace(/\s+/g, ' ');
+    }
+
+    function isRecognizableName(value) {
+      var name = normalizeName(value);
+      return name.split(' ').length >= 2 && name.replace(/\s/g, '').length >= 3;
+    }
+
+    function moveFocusToScreenTitle() {
+      window.setTimeout(function() {
+        var heading = app.querySelector('h1, h2');
+
+        if (heading) {
+          heading.setAttribute('tabindex', '-1');
+          heading.focus();
+        }
+      }, 0);
+    }
+
+    function trapFocus(container, event) {
+      var focusable = Array.prototype.slice.call(container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(function(element) {
+        return !element.disabled && element.offsetParent !== null;
+      });
+
+      if (focusable.length === 0) {
+        return;
+      }
+
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     function makeAttemptId() {

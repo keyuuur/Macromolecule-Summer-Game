@@ -38,10 +38,14 @@ The setup function is safe to run again. It will not duplicate the starter quest
 1. Deploy the Apps Script as a web app.
 2. Open the web app link on an iPad or iPad-sized browser window.
 3. Try starting with a blank name and confirm it is blocked.
-4. Enter a teacher-recognizable name.
-5. Confirm the review chart appears.
-6. Answer one single-choice question correctly and confirm the correct count increases.
-7. Answer one question incorrectly and confirm the explanation appears.
-8. Reach the end of a round and confirm it advances after 8 correct answers.
-9. Refresh the page during a game and confirm the saved-game prompt appears.
-10. Confirm `BestScores` creates or updates the student row only when the score improves.
+4. Try starting with only a first name and confirm it is blocked.
+5. Enter a first and last name, or first name plus last initial.
+6. Confirm the review chart appears when `allow_review_chart` is `TRUE`.
+7. Confirm the review chart is skipped/hidden when `allow_review_chart` is `FALSE`.
+8. Answer one single-choice question correctly and confirm the correct count increases.
+9. On a multi-select question, confirm the screen says how many answers to choose.
+10. Answer one question incorrectly and confirm the explanation appears.
+11. Reach the end of a round and confirm it advances after 8 correct answers.
+12. Refresh the page during a game and confirm the saved-game prompt appears.
+13. Finish the game and confirm Play Again stays locked until the Sheet save succeeds.
+14. Confirm `BestScores` creates or updates the student row only when the score improves.
