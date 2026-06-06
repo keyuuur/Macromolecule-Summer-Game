@@ -97,23 +97,24 @@ https://script.google.com/macros/s/AKfycbzTDDwpkVVcw6l-KqHIn7tQ51jQQtcE2BbSYtWS1
 
 ## Current Git And Workspace Status
 
-As of this handoff, the local repo has modified and untracked files.
+As of the June 6, 2026 pre-UI audit fix pass, the latest committed GitHub baseline is:
 
-Known modified files from prior implementation work:
+```text
+58aee39 Capture working state: game implementation, handoff docs, UI requirements
+```
+
+Current local changes after the pre-UI audit fixes:
 
 - `ClientScript.html`
-- `Data.gs`
-- `README.md`
 - `Styles.html`
+- `macro-LLM-handoff.md`
 
-Known untracked local files:
+Known untracked local files that should usually remain uncommitted unless the user explicitly asks:
 
 - `.playwright-cli/`
-- `ui_requirements_handoff.md`
 - `macromolecule_ui_handoff_package_20260606.zip`
-- `macro-LLM-handoff`
 
-Important: the prior app code changes were pushed to Apps Script, but they have not yet been committed to GitHub. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
+Important: the pre-UI audit fixes are local file changes only until a later commit/push/deploy step. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
 
 ## Runtime And Platform Constraints
 
@@ -716,6 +717,48 @@ macromolecule_ui_handoff_package_20260606.zip
 
 ## Change Log Since Previous Handoff
 
+### June 6, 2026 - Pre-UI Audit Fixes
+
+Purpose:
+
+- Implemented the highest-priority fixes from the read-only pre-UI audit before visual UI polish begins.
+
+What changed:
+
+- Reset/start-over now cancels queued local sync work, marks the old attempt as canceled, clears matching pending sync payloads, and prevents old async callbacks from resurrecting local progress.
+- Multi-select feedback now uses clearer wrong-answer wording instead of telling students they needed exactly N answers after they already selected exactly N.
+- Feedback receives focus after answer evaluation, and the next action is scrolled into view.
+- Multi-select options are grouped with `role="group"` and connected to the selected-count hint.
+- `Check Answer` auto-scrolls into view once the student selects the exact required number of answers.
+- Question action controls are sticky within long question cards to reduce iPad below-the-fold risk.
+- Final save wording now distinguishes progress checkpoints from final score saves.
+- The final screen tells students to keep the tab open while the score is saving.
+- A `beforeunload` warning is registered while a completed final score is still pending or actively syncing.
+- Corrupt localStorage values are removed instead of being repeatedly ignored.
+
+Files changed:
+
+- `ClientScript.html`
+- `Styles.html`
+- `macro-LLM-handoff.md`
+
+Tests run:
+
+- Apps Script/client syntax checks with Node `vm.Script`.
+- `git diff --check` passed with only normal LF-to-CRLF warnings.
+- Mocked reset/sync cancellation test passed.
+- Seed question sanity check passed: 49 cards, round counts 13/12/12/12, no duplicate IDs, correct answers present in options.
+
+Not done:
+
+- No Apps Script push or deployment.
+- No Google Sheet changes.
+- No live browser E2E on the Apps Script deployment for these local fixes yet.
+
+Email delivery:
+
+- Updated handoff file sent to the authenticated Gmail account after this pass with subject `Macromolecule Game`.
+
 ### June 6, 2026 - Initial Baseline
 
 This is the first `macro-LLM-handoff` file, so there is no prior handoff to compare against.
@@ -759,4 +802,3 @@ Tests run for this handoff:
 Email status:
 
 - This file should be emailed to the authenticated Gmail account after creation.
-

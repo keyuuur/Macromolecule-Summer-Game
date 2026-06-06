@@ -11,6 +11,7 @@
     var syncInFlight = false;
     var queuedSyncPayload = null;
     var activeSyncPayload = null;
+    var cancelledAttemptIds = {};
 
     function init() {
       google.script.run
@@ -37,7 +38,7 @@
 
         if (state.totalCorrect >= appData.config.targetCorrect) {
           if (hasUnsyncedProgress(state)) {
-            state.syncStatus = 'Completed score found on this iPad. Saving to Mr. Patel\'s Sheet...';
+            state.syncStatus = 'Final score found on this iPad. Saving to Mr. Patel\'s Sheet...';
             queueScoreSync(makeScorePayload('resume_completed', state), true);
             showFinalScreen();
             return;
@@ -55,6 +56,7 @@
     }
 
     function showLanding() {
+      state = null;
       currentCard = null;
       selectedOptions = [];
       render([
@@ -129,7 +131,7 @@
       ].join(''));
 
       document.getElementById('yesStartOver').addEventListener('click', function() {
-        clearSavedState();
+        resetCurrentAttempt();
         showLanding();
       });
 
@@ -222,7 +224,7 @@
 
       document.getElementById('resetLocal').addEventListener('click', function() {
         if (window.confirm('Clear saved progress on this iPad? This will not delete the best score in Mr. Patel\'s Sheet.')) {
-          clearSavedState();
+          resetCurrentAttempt();
           showLanding();
         }
       });
@@ -251,9 +253,9 @@
         '  <h2 class="prompt">' + escapeHtml(currentCard.prompt) + '</h2>',
         isMulti ? '  <p id="selectionHint" class="selection-hint">Choose ' + currentCard.correct.length + ' answers. Selected: 0 of ' + currentCard.correct.length + '.</p>' : '',
         '</div>',
-        '<div id="optionGrid" class="option-grid">' + renderOptions(currentCard, isMulti) + '</div>',
+        '<div id="optionGrid" class="option-grid"' + (isMulti ? ' role="group" aria-describedby="selectionHint"' : '') + '>' + renderOptions(currentCard, isMulti) + '</div>',
         isMulti ? '<button id="checkAnswer" class="primary-button" type="button" disabled>Check Answer</button>' : '',
-        '<div id="feedback" class="feedback hidden"></div>',
+        '<div id="feedback" class="feedback hidden" role="status" aria-live="polite" tabindex="-1"></div>',
         '<div class="button-row"><button id="nextCard" class="primary-button hidden" type="button">Continue</button></div>'
       ].join('');
 
@@ -307,7 +309,12 @@
       }
 
       updateSelectionHint();
-      document.getElementById('checkAnswer').disabled = selectedOptions.length !== currentCard.correct.length;
+      var checkAnswer = document.getElementById('checkAnswer');
+      checkAnswer.disabled = selectedOptions.length !== currentCard.correct.length;
+
+      if (!checkAnswer.disabled) {
+        scrollElementIntoView(checkAnswer);
+      }
     }
 
     function updateSelectionHint() {
@@ -344,8 +351,11 @@
         }
       });
 
-      if (document.getElementById('checkAnswer')) {
-        document.getElementById('checkAnswer').disabled = true;
+      var checkAnswer = document.getElementById('checkAnswer');
+
+      if (checkAnswer) {
+        checkAnswer.disabled = true;
+        checkAnswer.classList.add('hidden');
       }
 
       if (isCorrect) {
@@ -355,7 +365,7 @@
       } else {
         markIncorrect();
         feedback.textContent = currentCard.interaction_type === 'multi_select'
-          ? 'Not quite. You needed exactly ' + currentCard.correct.length + ' answers. ' + currentCard.explanation
+          ? 'Not quite. Some choices need switching. Green = correct picks, yellow = needed, red = not part of the answer. ' + currentCard.explanation
           : 'Not quite. ' + currentCard.explanation;
         feedback.className = 'feedback incorrect';
       }
@@ -363,6 +373,7 @@
       feedback.classList.remove('hidden');
       document.getElementById('nextCard').classList.remove('hidden');
       saveLocalState();
+      focusFeedback(feedback);
     }
 
     function markCorrect() {
@@ -440,6 +451,8 @@
       state.updatedAt = new Date().toISOString();
       saveLocalState();
       scheduleSync('game_complete', true);
+      state.syncStatus = 'Final score is saving to Mr. Patel\'s Sheet.';
+      saveLocalState();
       showFinalScreen();
     }
 
@@ -467,8 +480,8 @@
         '    <h1>You reached ' + appData.config.targetCorrect + ' correct answers!</h1>',
         '    <p class="subtitle">Score from this attempt: ' + state.totalCorrect + ' / ' + appData.config.targetCorrect + '</p>',
         '    <p class="subtitle">Rounds completed: ' + getRoundsCompleted() + ' / 4</p>',
-        '    <p id="syncStatus" class="sync-status">' + escapeHtml(state.syncStatus || 'Your score is saving automatically.') + '</p>',
-        scorePending && appData.config.allowReplay ? '    <p id="playAgainNotice" class="sync-status">Play Again unlocks after this score reaches the Sheet.</p>' : '',
+        '    <p id="syncStatus" class="sync-status">' + escapeHtml(state.syncStatus || 'Final score is saving to Mr. Patel\'s Sheet.') + '</p>',
+        scorePending && appData.config.allowReplay ? '    <p id="playAgainNotice" class="sync-status">Keep this tab open. Play Again unlocks after the score reaches the Sheet.</p>' : '',
         '    <div class="button-row">',
         '      ' + buttons.join(''),
         '    </div>',
@@ -479,7 +492,7 @@
       if (document.getElementById('playAgain')) {
         document.getElementById('playAgain').addEventListener('click', function() {
           if (hasPendingSyncForState(state) || hasUnsyncedProgress(state)) {
-            state.syncStatus = 'Save this score first, then Play Again will unlock.';
+            state.syncStatus = 'Final score is still saving. Play Again unlocks after it reaches the Sheet.';
             updateSyncStatus();
             return;
           }
@@ -522,7 +535,7 @@
         currentQueue: [],
         currentCardId: '',
         lastServerSyncedCorrect: 0,
-        syncStatus: 'Progress saves automatically.',
+        syncStatus: 'Progress saves on this iPad.',
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         completedAt: null
@@ -591,6 +604,11 @@
         return;
       }
 
+      if (isCancelledPayload(payload)) {
+        clearPendingSyncPayloadForPayload(payload);
+        return;
+      }
+
       queuedSyncPayload = payload;
       savePendingSyncPayload(payload);
 
@@ -610,6 +628,11 @@
         return;
       }
 
+      if (isCancelledPayload(payload)) {
+        clearPendingSyncPayloadForPayload(payload);
+        return;
+      }
+
       if (syncInFlight) {
         queuedSyncPayload = chooseHigherPayload(queuedSyncPayload, payload);
         savePendingSyncPayload(queuedSyncPayload);
@@ -618,7 +641,7 @@
 
       syncInFlight = true;
       activeSyncPayload = payload;
-      applySyncStatusToCurrentState(payload, 'Saving best score to Mr. Patel\'s Sheet...');
+      applySyncStatusToCurrentState(payload, isFinalScorePayload(payload) ? 'Saving final score to Mr. Patel\'s Sheet...' : 'Saving progress checkpoint...');
       updateSyncStatus();
 
       google.script.run
@@ -626,11 +649,17 @@
           syncInFlight = false;
           activeSyncPayload = null;
 
+          if (isCancelledPayload(payload)) {
+            clearPendingSyncPayloadForPayload(payload);
+            syncQueuedPayloadIfNeeded();
+            return;
+          }
+
           if (response && response.success) {
             markPayloadSynced(payload, response);
-            applySyncStatusToCurrentState(payload, response.saved ? 'Best score saved to Mr. Patel\'s Sheet.' : 'Your best score in the Sheet is already the same or higher.');
+            applySyncStatusToCurrentState(payload, getScoreSyncSuccessMessage(payload, response));
           } else {
-            applySyncStatusToCurrentState(payload, 'Saved on this iPad. Sheet sync needs another try.');
+            applySyncStatusToCurrentState(payload, 'Saved on this iPad. Try again to sync to Mr. Patel\'s Sheet.');
           }
 
           saveLocalState();
@@ -640,8 +669,15 @@
         .withFailureHandler(function(error) {
           syncInFlight = false;
           activeSyncPayload = null;
+
+          if (isCancelledPayload(payload)) {
+            clearPendingSyncPayloadForPayload(payload);
+            syncQueuedPayloadIfNeeded();
+            return;
+          }
+
           savePendingSyncPayload(payload);
-          applySyncStatusToCurrentState(payload, 'Saved on this iPad. Sheet sync needs another try.');
+          applySyncStatusToCurrentState(payload, 'Saved on this iPad. Try again to sync to Mr. Patel\'s Sheet.');
           saveLocalState();
           updateSyncStatus();
           syncQueuedPayloadIfNeeded();
@@ -665,7 +701,9 @@
 
       if (nextPayload) {
         window.setTimeout(function() {
-          syncBestScore(nextPayload);
+          if (!isCancelledPayload(nextPayload)) {
+            syncBestScore(nextPayload);
+          }
         }, 300);
       }
     }
@@ -741,6 +779,10 @@
     }
 
     function savePendingSyncPayload(payload) {
+      if (isCancelledPayload(payload)) {
+        return;
+      }
+
       try {
         window.localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(payload));
       } catch (error) {
@@ -752,6 +794,11 @@
         var raw = window.localStorage.getItem(PENDING_SYNC_KEY);
         return raw ? JSON.parse(raw) : null;
       } catch (error) {
+        try {
+          window.localStorage.removeItem(PENDING_SYNC_KEY);
+        } catch (removeError) {
+        }
+
         return null;
       }
     }
@@ -784,7 +831,7 @@
       }
 
       if (notice) {
-        notice.textContent = scorePending ? (scoreSaving ? 'Saving now. Play Again unlocks after this score reaches the Sheet.' : 'Play Again unlocks after this score reaches the Sheet.') : '';
+        notice.textContent = scorePending ? (scoreSaving ? 'Saving now. Keep this tab open until the Sheet confirms it.' : 'Keep this tab open. Play Again unlocks after the score reaches the Sheet.') : '';
       }
     }
 
@@ -937,6 +984,11 @@
         var raw = window.localStorage.getItem(STORAGE_KEY);
         return raw ? JSON.parse(raw) : null;
       } catch (error) {
+        try {
+          window.localStorage.removeItem(STORAGE_KEY);
+        } catch (removeError) {
+        }
+
         return null;
       }
     }
@@ -946,6 +998,114 @@
         window.localStorage.removeItem(STORAGE_KEY);
       } catch (error) {
       }
+    }
+
+    function resetCurrentAttempt() {
+      var attemptToReset = state;
+
+      if (syncTimer) {
+        window.clearTimeout(syncTimer);
+        syncTimer = null;
+      }
+
+      if (attemptToReset && attemptToReset.attemptId) {
+        cancelledAttemptIds[attemptToReset.attemptId] = true;
+      }
+
+      if (attemptToReset && queuedSyncPayload && payloadBelongsToState(queuedSyncPayload, attemptToReset)) {
+        queuedSyncPayload = null;
+      }
+
+      if (attemptToReset && activeSyncPayload && payloadBelongsToState(activeSyncPayload, attemptToReset)) {
+        activeSyncPayload = null;
+        syncInFlight = false;
+      }
+
+      clearPendingSyncPayloadForState(attemptToReset);
+      clearSavedState();
+      state = null;
+      currentCard = null;
+      selectedOptions = [];
+    }
+
+    function clearPendingSyncPayloadForState(sourceState) {
+      if (!sourceState) {
+        return;
+      }
+
+      clearPendingSyncPayloadForPayload({
+        studentName: sourceState.studentName,
+        attemptId: sourceState.attemptId
+      });
+    }
+
+    function clearPendingSyncPayloadForPayload(payload) {
+      var pending = loadPendingSyncPayload();
+
+      if (pending && payloadBelongsToState(pending, payload)) {
+        try {
+          window.localStorage.removeItem(PENDING_SYNC_KEY);
+        } catch (error) {
+        }
+      }
+    }
+
+    function isCancelledPayload(payload) {
+      return !!(payload && payload.attemptId && cancelledAttemptIds[payload.attemptId]);
+    }
+
+    function getScoreSyncSuccessMessage(payload, response) {
+      var finalScore = Number(response.bestCorrect || payload.totalCorrect || 0) >= Number(payload.targetCorrect || appData.config.targetCorrect || 0);
+
+      if (response.saved) {
+        return finalScore ? 'Final score saved to Mr. Patel\'s Sheet.' : 'Progress checkpoint saved.';
+      }
+
+      return finalScore ? 'Final score is already saved in Mr. Patel\'s Sheet.' : 'Progress checkpoint is already saved.';
+    }
+
+    function isFinalScorePayload(payload) {
+      return Number((payload || {}).totalCorrect || 0) >= Number((payload || {}).targetCorrect || appData.config.targetCorrect || 0);
+    }
+
+    function focusFeedback(feedback) {
+      window.setTimeout(function() {
+        if (feedback && feedback.focus) {
+          feedback.focus();
+          scrollElementIntoView(document.getElementById('nextCard') || feedback);
+        }
+      }, 0);
+    }
+
+    function scrollElementIntoView(element) {
+      if (!element || !element.scrollIntoView) {
+        return;
+      }
+
+      try {
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      } catch (error) {
+        element.scrollIntoView();
+      }
+    }
+
+    function shouldWarnBeforeLeaving() {
+      return !!(state
+        && appData
+        && Number(state.totalCorrect || 0) >= Number(appData.config.targetCorrect || 0)
+        && (hasPendingSyncForState(state) || hasUnsyncedProgress(state) || isSyncBusyForState(state)));
+    }
+
+    function handleBeforeUnload(event) {
+      if (!shouldWarnBeforeLeaving()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = '';
     }
 
     function render(html) {
@@ -1043,6 +1203,7 @@
         .replace(/'/g, '&#039;');
     }
 
+    window.addEventListener('beforeunload', handleBeforeUnload);
     init();
   })();
 </script>
