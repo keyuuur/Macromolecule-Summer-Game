@@ -98,15 +98,14 @@ https://script.google.com/macros/s/AKfycbzTDDwpkVVcw6l-KqHIn7tQ51jQQtcE2BbSYtWS1
 
 ## Current Git And Workspace Status
 
-As of the June 6, 2026 pre-UI audit fix pass, the latest committed GitHub baseline is:
+As of the June 6, 2026 current pass, the latest committed GitHub baseline is:
 
 ```text
-58aee39 Capture working state: game implementation, handoff docs, UI requirements
+04103e0 Redesign game UI with C2 guild dashboard
 ```
 
-Current local changes after the pre-UI audit fixes:
+Current local changes:
 
-- `ClientScript.html`
 - `Styles.html`
 - `macro-LLM-handoff.md`
 
@@ -114,8 +113,9 @@ Known untracked local files that should usually remain uncommitted unless the us
 
 - `.playwright-cli/`
 - `macromolecule_ui_handoff_package_20260606.zip`
+- `output/`
 
-Important: the pre-UI audit fixes are local file changes only until a later commit/push/deploy step. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
+Important: current pending work is visual/style refresh and handoff docs only; no logic files are expected to change in this pass. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
 
 ## Runtime And Platform Constraints
 
@@ -540,27 +540,12 @@ Nucleic Acids:
 
 ## Current QA And Testing Notes
 
-Local verification already performed in prior work:
+Current verification snapshot:
 
-- Apps Script `.gs` syntax checks passed.
 - Client JavaScript syntax check passed after extracting from `ClientScript.html`.
 - `git diff --check` passed except normal CRLF warnings.
-- Seed data validation passed:
-  - 49 cards.
-  - Round counts: 13, 12, 12, 12.
-  - No duplicate/correct/options issues found.
-- Server score logic test passed:
-  - Fake raw score of 999 with no valid IDs saved as 0.
-  - All valid starter IDs saved as 32.
-  - One-name student rejected.
-
-Live Apps Script E2E test previously passed:
-
-- Test student: `Codex Test Student`.
-- Answered 32/32.
-- Completed 4 rounds.
-- Final status: `Best score saved to Mr. Patel's Sheet.`
-- Play Again became visible and unlocked after save confirmation.
+- `Options` and `ClientScript.html` were not changed in this pass.
+- Prior server score logic and seed checks in this branch remain valid.
 
 Screenshot QA artifacts:
 
@@ -805,6 +790,29 @@ Deployment / external state:
 - No Apps Script deployment was created.
 - No Google Sheet changes were made.
 - GitHub push should include only the source/docs files listed above, not generated screenshots, Playwright harness files, old zip packages, credentials, or temp artifacts.
+
+### June 6, 2026 - LLM Handoff Refresh Prior To Push
+
+Purpose:
+
+- Refresh this handoff for the immediate "update handoff then push to GitHub" request.
+- Keep the next LLM informed of current style-only workspace state.
+
+What changed:
+
+- Updated `macro-LLM-handoff.md` to reflect the current working branch:
+  - Baseline commit now recognized as `04103e0`.
+  - Current local changes limited to `Styles.html` plus this file.
+  - `ClientScript.html` remains unchanged in this latest pass.
+
+Files changed:
+
+- `macro-LLM-handoff.md`
+
+Scope notes:
+
+- This section did not change game logic, score rules, or backend flow.
+- Push scope remains source/docs only: style + handoff docs.
 
 ### June 6, 2026 - Pre-UI Audit Fixes
 
