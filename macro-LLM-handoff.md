@@ -1,6 +1,7 @@
 # macro-LLM-handoff
 
 Generated: June 6, 2026
+Last updated: June 6, 2026
 
 This is the initial LLM handoff file for the Macromolecule Summer Game project. Future versions of this file should communicate what changed since the previous handoff, while keeping enough project context for another LLM to work without rediscovering the basics.
 
@@ -716,6 +717,94 @@ macromolecule_ui_handoff_package_20260606.zip
 ```
 
 ## Change Log Since Previous Handoff
+
+### June 6, 2026 - C2 Guild Dashboard RPG Visual Redesign
+
+Purpose:
+
+- Implemented the approved `pirate_pantry_c2_ui_handoff.md` visual direction for Pirate Pantry: Macromolecule Match.
+- Scope was CSS and HTML/template redesign only, preserving the existing game mechanics, local save, score sync, and Apps Script integration.
+
+What changed:
+
+- Replaced the old light quiz styling with a dark navy app shell, parchment content panels, gold accents, and deep green primary actions.
+- Added a compact top dashboard header for gameplay with brand/crest, Quest Progress, Total Progress, and Toolkit modules.
+- Removed the bottom footer information strip from gameplay. Reset saved game and save status now live in the top Toolkit area.
+- Restyled landing, saved-game prompt, start-over confirm, review chart intro, gameplay, single-choice questions, multi-select questions, feedback, round complete, final save pending, final save confirmed, and load error states.
+- Added large touch-friendly answer tiles with badge-style icons and clear selected/correct/needed/incorrect states.
+- Added color-coded macromolecule treatment:
+  - green for carbohydrates,
+  - gold for lipids,
+  - purple for proteins,
+  - blue for nucleic acids.
+- Restyled the review chart as a C2 field guide with four color-coded molecule cards.
+- Updated the final screen to show a Quest Complete celebration, score summary, save status card, and Play Again locked until save confirmation.
+- Fixed the question molecule chip to read `target_macromolecule` from the Apps Script payload, falling back to `target` only for non-live harness compatibility.
+
+Files changed:
+
+- `Styles.html`
+- `ClientScript.html`
+- `macro-LLM-handoff.md`
+
+Preservation checks:
+
+- `STORAGE_KEY` and `PENDING_SYNC_KEY` remain unchanged.
+- `google.script.run.getGameData()` and `google.script.run.saveBestScore(payload)` call structures remain unchanged.
+- Protected logic functions were compared against the previous commit and remain unchanged:
+  - `evaluateAnswer`
+  - `markCorrect`
+  - `markIncorrect`
+  - `scheduleSync`
+  - `queueScoreSync`
+  - `syncBestScore`
+  - localStorage helpers
+  - `resetCurrentAttempt`
+  - `focusFeedback`
+  - `scrollElementIntoView`
+  - beforeunload handling
+- Multi-select `role="group"` and `aria-describedby="selectionHint"` remain present.
+- Modal focus-trap behavior in `openReviewModal` / `trapFocus` remains unchanged.
+
+Tests run:
+
+- Node `vm.Script` syntax check on extracted JavaScript from `ClientScript.html`: passed.
+- `git diff --check`: passed with only normal LF-to-CRLF warnings.
+- Seed sanity check: passed, 49 total cards with round counts 13/12/12/12.
+- Four local Playwright CLI E2E tests against a mocked Apps Script harness at a 1024x768 viewport:
+  - landing, name validation, review chart: passed.
+  - single-choice question and correct feedback/focus: passed.
+  - multi-select wrong feedback with color/text labels: passed.
+  - full completion, final save pending, final save confirmed, Play Again unlock: passed.
+- Console check after browser run: 0 errors, 0 warnings.
+
+Screenshots captured:
+
+```text
+output/playwright/c2-screenshots/01-test1-landing.png
+output/playwright/c2-screenshots/02-test1-name-validation.png
+output/playwright/c2-screenshots/03-test1-review-chart.png
+output/playwright/c2-screenshots/04-test2-single-choice-question.png
+output/playwright/c2-screenshots/05-test2-single-choice-correct-feedback.png
+output/playwright/c2-screenshots/06-test3-multi-select-question.png
+output/playwright/c2-screenshots/07-test3-multi-select-wrong-feedback.png
+output/playwright/c2-screenshots/08-test4-final-save-pending.png
+output/playwright/c2-screenshots/09-test4-final-save-confirmed.png
+```
+
+Practical notes:
+
+- The C2 redesign reads well in the 1024x768 local browser viewport.
+- The gameplay header is compact enough to keep the question card visible without reintroducing a bottom footer.
+- The multi-select feedback screen is clear but can become tall after labels appear; the sticky Continue button remains reachable, but this is the screen to watch most closely during iPad portrait polish.
+- The local E2E harness mocked Apps Script save callbacks, so no real Sheet rows were written during these tests.
+
+Deployment / external state:
+
+- No Apps Script push was performed during this redesign pass.
+- No Apps Script deployment was created.
+- No Google Sheet changes were made.
+- GitHub push should include only the source/docs files listed above, not generated screenshots, Playwright harness files, old zip packages, credentials, or temp artifacts.
 
 ### June 6, 2026 - Pre-UI Audit Fixes
 
