@@ -177,9 +177,9 @@
   .quest-header {
     display: grid;
     grid-template-columns: minmax(240px, 1.3fr) minmax(165px, 0.8fr) minmax(170px, 0.9fr) minmax(190px, 0.85fr);
-    gap: var(--space-3);
+    gap: var(--space-4);
     align-items: stretch;
-    padding: var(--space-3);
+    padding: var(--space-4);
     border: 1px solid rgba(217, 164, 65, 0.42);
     border-radius: var(--radius-md);
     background: rgba(6, 20, 33, 0.92);
@@ -217,9 +217,9 @@
   .dashboard-module {
     display: grid;
     align-content: center;
-    gap: var(--space-2);
+    gap: var(--space-3);
     min-width: 0;
-    padding: var(--space-3);
+    padding: var(--space-3) var(--space-4);
     border: 1px solid rgba(217, 164, 65, 0.3);
     border-radius: var(--radius-md);
     background: rgba(11, 45, 68, 0.86);
@@ -288,7 +288,7 @@
   .screen-stage {
     display: grid;
     align-items: start;
-    gap: var(--space-4);
+    gap: var(--space-6);
   }
 
   .panel {
@@ -301,7 +301,7 @@
       var(--parchment-50);
     background-size: 26px 26px, 26px 26px, auto;
     box-shadow: var(--shadow-card);
-    padding: clamp(16px, 3vw, 28px);
+    padding: clamp(20px, 4vw, 32px);
   }
 
   .story-panel {
@@ -328,7 +328,7 @@
     content: "";
     position: absolute;
     inset: 0 0 auto;
-    height: 8px;
+    height: 12px;
     background: repeating-linear-gradient(90deg, var(--navy-800), var(--navy-800) 28px, var(--gold-500) 28px, var(--gold-500) 42px);
   }
 
@@ -337,7 +337,7 @@
     display: grid;
     gap: var(--space-2);
     margin: calc(-1 * clamp(16px, 3vw, 28px)) calc(-1 * clamp(16px, 3vw, 28px)) var(--space-5);
-    padding: var(--space-5) clamp(16px, 3vw, 28px) var(--space-4);
+    padding: var(--space-6) clamp(16px, 3vw, 28px) var(--space-5);
     border-bottom: 1px solid rgba(124, 85, 24, 0.18);
     background: rgba(247, 235, 207, 0.82);
   }
@@ -358,7 +358,7 @@
   .landing-rules {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
+    gap: var(--space-4);
     width: min(100%, 840px);
   }
 
@@ -444,6 +444,7 @@
 
   .button-row {
     justify-content: center;
+    margin-top: var(--space-5);
   }
 
   .top-bar {
@@ -615,7 +616,7 @@
   .option-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-3);
+    gap: var(--space-4);
   }
 
   .answer-option {
@@ -626,7 +627,7 @@
     align-items: center;
     border: 2px solid rgba(8, 32, 51, 0.28);
     border-radius: var(--radius-md);
-    padding: 13px 14px;
+    padding: var(--space-4);
     color: var(--ink);
     background: linear-gradient(var(--white), var(--parchment-50));
     font-weight: 900;
@@ -722,7 +723,7 @@
     grid-column: 2;
     display: block;
     width: fit-content;
-    margin-top: 6px;
+    margin-top: 8px;
     padding: 4px 8px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.62);
@@ -735,7 +736,7 @@
     border-left-width: 8px;
     border-radius: var(--radius-md);
     background: var(--needed-bg);
-    padding: var(--space-4);
+    padding: var(--space-5);
     color: var(--ink);
     font-weight: 800;
     line-height: 1.45;
@@ -775,7 +776,7 @@
     border: 2px solid rgba(185, 130, 34, 0.42);
     border-radius: var(--radius-md);
     background: rgba(255, 255, 255, 0.72);
-    padding: var(--space-4);
+    padding: var(--space-5);
   }
 
   .review-title {
@@ -865,7 +866,7 @@
     border: 2px solid var(--gold-600);
     border-radius: var(--radius-md);
     background: rgba(247, 235, 207, 0.72);
-    padding: var(--space-4);
+    padding: var(--space-5);
   }
 
   .save-status-card.saved,

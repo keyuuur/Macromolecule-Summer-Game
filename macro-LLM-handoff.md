@@ -1,7 +1,7 @@
 # macro-LLM-handoff
 
 Generated: June 6, 2026
-Last updated: June 6, 2026
+Last updated: June 7, 2026
 
 This is the initial LLM handoff file for the Macromolecule Summer Game project. Future versions of this file should communicate what changed since the previous handoff, while keeping enough project context for another LLM to work without rediscovering the basics.
 
@@ -98,16 +98,22 @@ https://script.google.com/macros/s/AKfycbzTDDwpkVVcw6l-KqHIn7tQ51jQQtcE2BbSYtWS1
 
 ## Current Git And Workspace Status
 
-As of the June 6, 2026 current pass, the latest committed GitHub baseline is:
+As of the June 7, 2026 real-photo asset pass, the latest committed GitHub baseline is:
 
 ```text
-04103e0 Redesign game UI with C2 guild dashboard
+02b8d6a Update LLM handoff and push visual patch state
 ```
 
 Current local changes:
 
+- `ClientScript.html`
+- `Data.gs`
+- `SeedData.gs`
 - `Styles.html`
 - `macro-LLM-handoff.md`
+- `pirate_pantry_real_photo_asset_manifest.md`
+- `scripts/asset-links.template.json`
+- `scripts/prepare-asset-config.js`
 
 Known untracked local files that should usually remain uncommitted unless the user explicitly asks:
 
@@ -115,7 +121,7 @@ Known untracked local files that should usually remain uncommitted unless the us
 - `macromolecule_ui_handoff_package_20260606.zip`
 - `output/`
 
-Important: current pending work is visual/style refresh and handoff docs only; no logic files are expected to change in this pass. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
+Important: current pending work is a visual/UI asset pipeline refresh plus handoff docs. The logic touched in `ClientScript.html`, `Data.gs`, and `SeedData.gs` is limited to optional image asset wiring and Config defaults; game mechanics, scoring, storage keys, score sync, and `google.script.run` calls should remain preserved. Do not run destructive git commands. Do not revert user or prior-agent changes unless the user explicitly asks.
 
 ## Runtime And Platform Constraints
 
@@ -702,6 +708,121 @@ macromolecule_ui_handoff_package_20260606.zip
 ```
 
 ## Change Log Since Previous Handoff
+
+### June 7, 2026 - Wikimedia Photo Defaults Wired Into Runtime
+
+Purpose:
+
+- Move one concrete step toward the real-photo UI request by filling `ClientScript.html` asset URLs with vetted Wikimedia Commons image links from the existing local candidate run.
+- Preserve all gameplay logic and persistence behavior while making the UI render photos when the app loads.
+
+What changed:
+
+- Replaced all placeholder values in `IMAGE_ASSETS` with live public URLs for landing props and answer options.
+- Kept the existing URL precedence order (`window.PIRATE_PANTRY_ASSETS`, `appData.assets`, `appData.config.assets`, local fallback).
+- Preserved fallback behavior for missing or broken links (CSS/shape visuals still render).
+- Did not modify scoring, question selection, state sync, storage keys, or `google.script.run` calls.
+
+Files changed:
+
+- `ClientScript.html`
+- `macro-LLM-handoff.md`
+
+Checks run:
+
+- No additional automated App Script tests were run in this pass.
+- Previous asset candidate pipeline checks and smoke checks were already completed in the earlier photo-asset pipeline pass.
+
+Deployment / external state:
+
+- No Apps Script push or deployment during this pass.
+- No Google Sheet changes.
+
+### June 7, 2026 - Wikimedia Candidate Resume Mode
+
+Purpose:
+
+- Make `scripts/find-public-asset-candidates.js` resumable across multiple runs without re-querying already-complete keys.
+- Reduce 429 risk and improve practical long-gallery generation by skipping keys that already have valid candidates in an existing output JSON file.
+
+What changed:
+
+- Added `--resume-from <path>` support to preload existing candidate output JSON (results/errors/searchTerms).
+- Added `--skip-filled` to skip any selected key already containing at least one candidate in the resumed payload.
+- Added `resumeFrom`, `skipFilled`, `skippedKeys`, and improved `searchTerms` propagation in output JSON for better traceability and interrupted-run continuity.
+- Gallery headers now render multi-phrase search terms as readable `term | term` text instead of raw array string output.
+- Updated usage/help text to document the new resumable workflow.
+- Updated `pirate_pantry_real_photo_asset_manifest.md` with examples and guidance for multi-run resume usage.
+
+Files changed:
+
+- `scripts/find-public-asset-candidates.js`
+- `pirate_pantry_real_photo_asset_manifest.md`
+- `macro-LLM-handoff.md`
+
+Checks run:
+
+- `node -c scripts/find-public-asset-candidates.js`
+- `node scripts/find-public-asset-candidates.js --help`
+- Resume/skip dry-run using a temporary JSON with cached candidates and `--skip-filled` (no network calls made; confirmed skipped keys were recorded, candidate data was preserved, output JSON was written, and gallery HTML was produced).
+
+### June 7, 2026 - Real Photo Asset Pipeline
+
+Purpose:
+
+- Prepare the game to use real PNG/WebP/JPG images instead of CSS-only/SVG-like visual placeholders.
+- Keep the C2 Guild Dashboard RPG layout intact while allowing future Google Drive image links to drop in without changing gameplay.
+
+What changed:
+
+- `ClientScript.html` now has an optional `IMAGE_ASSETS` map and reads asset URLs from `window.PIRATE_PANTRY_ASSETS`, `appData.assets`, `appData.config.assets`, or the local map.
+- Google Drive file links are normalized in the browser to `https://drive.google.com/thumbnail?id=FILE_ID&sz=w512`.
+- Landing props and answer options render real `<img>` assets when a URL exists, then fall back to the existing CSS visual treatment if an image is missing or fails to load.
+- Every current seeded answer option in `SeedData.gs` maps to an image asset key. Reused visuals are documented in `pirate_pantry_real_photo_asset_manifest.md`.
+- `Data.gs` exposes optional asset config values from the Sheet as `appData.assets`.
+- `SeedData.gs` includes blank `asset_*` Config defaults so future setup/config passes can store image links without changing source code.
+- Added `scripts/asset-links.template.json` and `scripts/prepare-asset-config.js` to normalize/check image links and print paste-ready Config rows.
+- The asset helper now warns when a Drive folder link or unsupported Drive page link is pasted into an individual image slot.
+- Added `scripts/asset-search-terms.json` and `scripts/find-public-asset-candidates.js` as an optional review-first Wikimedia Commons candidate workflow if Drive images are not ready. The helper filters SVG/GIF files and obvious people/context photos, labels first-result links as not approved without review, can continue through rate-limit/search failures, and can generate a browsable HTML gallery.
+- Added `pirate_pantry_real_photo_asset_manifest.md` with Drive folder setup, priority asset list, suggested filenames, and next-pass workflow.
+
+Files changed:
+
+- `ClientScript.html`
+- `Data.gs`
+- `SeedData.gs`
+- `Styles.html`
+- `macro-LLM-handoff.md`
+- `pirate_pantry_real_photo_asset_manifest.md`
+- `scripts/asset-links.template.json`
+- `scripts/prepare-asset-config.js`
+- `scripts/asset-search-terms.json`
+- `scripts/find-public-asset-candidates.js`
+
+Tests run:
+
+- Question-bank asset coverage check: 32 unique answer labels, 0 unmapped.
+- `git diff --check`: passed with only normal LF-to-CRLF warnings.
+- `node -c scripts/prepare-asset-config.js`: passed.
+- `node -c scripts/find-public-asset-candidates.js`: passed.
+- `node scripts/prepare-asset-config.js scripts/asset-links.template.json`: passed; reports 26 missing blank asset slots as expected.
+- Sample `--check` helper run: data-image URL passed; fake Drive ID normalized and failed as a non-image response as expected.
+- Sample folder-link helper run: Drive folder URL produced an input warning and failed `--check` with a clear "individual file link" message as expected.
+- Sample Wikimedia candidate run for `optionBread` and `optionDNA`: passed and returned real image candidates with license/credit fields. Initial bread result demonstrated why candidates need human review before use; script was tightened afterward to reject obvious people/context photos.
+- Full public candidate gallery generated at `output/asset-candidates/public-asset-candidates.html` with JSON at `output/asset-candidates/public-asset-candidates.json`: 26 asset sections, 20 image cards, 13 empty/no-candidate sections, 4 search-error sections, no horizontal overflow in Playwright.
+- Local Playwright E2E through landing, name validation, review chart, single-choice feedback, multi-select feedback, final save pending, and final save confirmed: passed, no console errors.
+- Asset smoke check with injected PNG data images: landing rendered 4 prop images, Round 2 rendered 7 image-backed answer tiles, 0 failed option images, no horizontal overflow, no console errors.
+
+Remaining blocker:
+
+- The app still needs actual shared image links from a Drive folder or other public image host before the UI can truly become real-photo based. Suggested folder: `Pirate Pantry Assets`, shared as `Anyone with the link can view`.
+
+Deployment / external state:
+
+- No Apps Script push was performed during this pass.
+- No Apps Script deployment was created.
+- No Google Sheet changes were made.
+- No GitHub commit or push was made during this pass.
 
 ### June 6, 2026 - C2 Guild Dashboard RPG Visual Redesign
 

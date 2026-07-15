@@ -1,0 +1,131 @@
+{
+  "landingChest": [
+    "wooden treasure chest",
+    "treasure chest open",
+    "old wooden chest"
+  ],
+  "landingBottleGreen": [
+    "green glass bottle",
+    "green bottle",
+    "laboratory green bottle"
+  ],
+  "landingBottleBlue": [
+    "blue glass bottle",
+    "blue bottle",
+    "laboratory blue bottle"
+  ],
+  "landingCompass": [
+    "compass photograph",
+    "magnetic compass"
+  ],
+  "optionCarbohydrates": [
+    "bread pasta sugar",
+    "carbohydrate foods",
+    "starch foods"
+  ],
+  "optionLipids": [
+    "butter oil nuts",
+    "lipid foods",
+    "fats and oils"
+  ],
+  "optionProteins": [
+    "protein foods meat beans",
+    "meat beans nuts",
+    "protein food"
+  ],
+  "optionNucleicAcids": [
+    "DNA model",
+    "RNA model",
+    "nucleic acid model"
+  ],
+  "optionBread": [
+    "bread loaf",
+    "bread rolls",
+    "sliced bread"
+  ],
+  "optionPasta": [
+    "pasta photograph",
+    "spaghetti pasta",
+    "dry pasta"
+  ],
+  "optionSugars": [
+    "sugar cubes",
+    "white sugar cubes",
+    "granulated sugar"
+  ],
+  "optionButter": [
+    "butter photograph",
+    "butter curl",
+    "butter block"
+  ],
+  "optionOil": [
+    "olive oil bottle",
+    "vegetable oil bottle",
+    "cooking oil bottle"
+  ],
+  "optionMeat": [
+    "meat photograph",
+    "steak photograph",
+    "cooked meat"
+  ],
+  "optionNuts": [
+    "mixed nuts",
+    "almonds walnuts",
+    "nuts food"
+  ],
+  "optionSimpleSugars": [
+    "glucose molecule model",
+    "sugar molecule model",
+    "glucose molecular model"
+  ],
+  "optionFattyAcids": [
+    "fatty acid molecule model",
+    "stearic acid molecule model",
+    "oleic acid molecule model"
+  ],
+  "optionAminoAcids": [
+    "amino acid molecule model",
+    "glycine molecule model",
+    "amino acid model"
+  ],
+  "optionNucleotides": [
+    "nucleotide molecule model",
+    "adenosine monophosphate model",
+    "nucleotide model"
+  ],
+  "optionDNA": [
+    "DNA molecule model",
+    "DNA model",
+    "double helix model"
+  ],
+  "optionRNA": [
+    "RNA molecule model",
+    "RNA model",
+    "ribonucleic acid model"
+  ],
+  "optionCarbon": [
+    "carbon element",
+    "carbon sample",
+    "graphite carbon"
+  ],
+  "optionHydrogen": [
+    "hydrogen molecule model",
+    "hydrogen element",
+    "hydrogen gas"
+  ],
+  "optionOxygen": [
+    "oxygen molecule model",
+    "oxygen element",
+    "oxygen gas cylinder"
+  ],
+  "optionNitrogen": [
+    "nitrogen molecule model",
+    "nitrogen element",
+    "liquid nitrogen"
+  ],
+  "optionPhosphorus": [
+    "phosphorus sample",
+    "red phosphorus",
+    "phosphorus element"
+  ]
+}
