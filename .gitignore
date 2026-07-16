@@ -1,13 +1,38 @@
 # Local Apps Script login/auth files
+.clasp.json
 .clasprc.json
 client_secret_*.json
 credentials*.json
 token*.json
 
+# Modern web app dependencies and build output
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+
 # System/editor files
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local browser and legacy QA artifacts
+.playwright-cli/
+output/
+_tmp_zip_view/
+tmp_*/
+tmp-*/
+*.bak
+*.local.bak
+Styles.compare-*.html
+macromolecule_ui_handoff_package_*.zip
+compare_images.py
+tmp_check.js
+/visual-check.png
 
 # Temporary files
 *.tmp

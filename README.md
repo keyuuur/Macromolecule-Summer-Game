@@ -1,51 +1,71 @@
-# Macromolecule Summer Game
+# Macromolecule Evidence Lab
 
-This folder is the local workspace for the Macromolecule Summer Game.
+Macromolecule Evidence Lab is a short, formative biology activity for Keyur's
+ninth-grade classes. Students classify carbohydrates, lipids, proteins, and
+nucleic acids, explain one piece of supporting evidence for each case, repair
+first-try misconceptions, and then apply the same ideas to fresh transfer cases.
 
-Connected services:
+The intended classroom run is 10–15 minutes on a school iPad. It is not a
+graded assignment, leaderboard, or public student record.
 
-- GitHub: https://github.com/keyuuur/Macromolecule-Summer-Game
-- Google Apps Script: configured in `.clasp.json`
+## Student Flow
 
-Current setup notes:
+1. Enter a first name and one last initial.
+2. Complete one unscored tutorial case.
+3. Complete eight diagnostic cases: two per macromolecule and two checks per case.
+4. Repair each distinct first-try misconception with focused guidance.
+5. Complete four unaided transfer cases: one per macromolecule.
+6. Review a non-graded learning summary and result-delivery status.
 
-- The folder has its own Git repository so this project stays separate from the larger parent folder.
-- Credential files are ignored so they do not get committed to GitHub.
-- Apps Script uses the Google Sheet connected to the script for `Config`, `QuestionBank`, and `BestScores`.
-- Apps Script pull/push may still need access to be fixed if clasp is not logged into an account that can edit the script.
+Correct answers and answer-bearing labels stay hidden until a response is
+evaluated. A food is described as *mostly representing* a category because real
+foods can contain more than one kind of macromolecule.
 
-To fix Apps Script access, make sure the Apps Script project is shared with the Google account currently logged in to clasp, or log clasp into the Google account that owns the script.
+## Technology
 
-## Teacher setup
+- Vite, React, and TypeScript for the student app
+- Accessible DOM controls rather than Phaser, Three.js, or a canvas
+- Progressive Web App support for cached loading and interrupted-session recovery
+- Vercel as the planned student-app host
+- Google Apps Script and a private Google Sheet as the planned result receiver
 
-After the Apps Script files are pushed or copied into the bound Apps Script project:
+The result endpoint is inactive when `VITE_RESULTS_ENDPOINT` is not configured.
+Local and preview development must remain disconnected from the live Sheet.
 
-1. Open the connected Google Sheet.
-2. Click **Extensions**.
-3. Click **Apps Script**.
-4. Select the `setupPiratePantry` function.
-5. Click **Run**.
-6. Approve permissions if Google asks.
-7. Return to the Sheet and confirm these tabs exist:
-   - `Config`
-   - `QuestionBank`
-   - `BestScores`
+## Local Development
 
-The setup function is safe to run again. It will not duplicate the starter question bank if the `QuestionBank` tab already has question rows.
+```powershell
+npm install
+npm run dev
+```
 
-## Student testing checklist
+Verification commands:
 
-1. Deploy the Apps Script as a web app.
-2. Open the web app link on an iPad or iPad-sized browser window.
-3. Try starting with a blank name and confirm it is blocked.
-4. Try starting with only a first name and confirm it is blocked.
-5. Enter a first and last name, or first name plus last initial.
-6. Confirm the review chart appears when `allow_review_chart` is `TRUE`.
-7. Confirm the review chart is skipped/hidden when `allow_review_chart` is `FALSE`.
-8. Answer one single-choice question correctly and confirm the correct count increases.
-9. On a multi-select question, confirm the screen says how many answers to choose.
-10. Answer one question incorrectly and confirm the explanation appears.
-11. Reach the end of a round and confirm it advances after 8 correct answers.
-12. Refresh the page during a game and confirm the saved-game prompt appears.
-13. Finish the game and confirm Play Again stays locked until the Sheet save succeeds.
-14. Confirm `BestScores` creates or updates the student row only when the score improves.
+```powershell
+npm run lint
+npm run test:run
+npm run build
+npm run playtest
+npm run verify
+```
+
+## Project Map
+
+- `src/` — student interface, content, attempt state, persistence, and result gateway
+- `backend/apps-script/` — private result receiver and Sheet setup
+- `docs/LEARNING_DESIGN.md` — authoritative learning flow and content boundaries
+- `docs/handoffs/PROJECT_CONTEXT.md` — stable product and architecture decisions
+- `docs/handoffs/CURRENT_STATUS.md` — current verified migration posture and gates
+- `legacy/apps-script-v1/` — preserved Pirate Pantry Apps Script application and its historical handoffs
+
+## Safety and Release Posture
+
+Only first name plus one last initial is collected. Student names and detailed
+responses must not appear in public views. There is no public read or leaderboard
+endpoint.
+
+The legacy Apps Script deployment has not been replaced. No Vercel production
+deployment or live Google Sheet connection should occur until the automated,
+browser, school-iPad, student-Wi-Fi, and controlled result-submission gates in
+`docs/handoffs/CURRENT_STATUS.md` are satisfied and Keyur explicitly approves the
+external change.
