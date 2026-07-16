@@ -15,6 +15,8 @@
 - Baseline: `02b8d6a` from `origin/main`
 - Legacy checkpoint: `5c68afd chore: preserve legacy app context and asset tooling`
 - Preservation tag: `legacy-appscript-v1`
+- Verified implementation checkpoint:
+  `aebf7d9 feat: build macromolecule evidence lab`
 - The old Apps Script student app and historical handoffs are preserved under
   `legacy/apps-script-v1/`; the historical deployment was not changed.
 - Machine-local CLASP/auth files, dependencies, generated screenshots, browser
