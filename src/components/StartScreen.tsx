@@ -3,10 +3,12 @@ import { normalizeStudentName } from '../engine/attempt'
 
 type StartScreenProps = Readonly<{
   onStart: (studentName: string) => void
+  pendingCount: number
+  onClearPending: () => void
   storageWarning?: string
 }>
 
-export function StartScreen({ onStart, storageWarning }: StartScreenProps) {
+export function StartScreen({ onStart, pendingCount, onClearPending, storageWarning }: StartScreenProps) {
   const [firstName, setFirstName] = useState('')
   const [lastInitial, setLastInitial] = useState('')
   const [error, setError] = useState('')
@@ -42,6 +44,13 @@ export function StartScreen({ onStart, storageWarning }: StartScreenProps) {
         <p className="kicker">Researcher check-in</p>
         <h2 id="check-in-title">Set up your lab record</h2>
         <p>Use your first name and only the first letter of your last name.</p>
+        {pendingCount > 0 ? (
+          <div className="pending-results-notice" role="status">
+            <strong>{pendingCount} unsent {pendingCount === 1 ? 'result is' : 'results are'} saved on this iPad.</strong>
+            <p>Reconnect and keep this page open; the app will retry automatically, or ask your teacher before deleting it.</p>
+            <button className="text-button" type="button" onClick={onClearPending}>Delete unsent results from this iPad</button>
+          </div>
+        ) : null}
         <form onSubmit={handleSubmit} noValidate>
           <label htmlFor="first-name">First name</label>
           <input
@@ -67,7 +76,7 @@ export function StartScreen({ onStart, storageWarning }: StartScreenProps) {
           {storageWarning ? <p className="form-warning" role="status">{storageWarning}</p> : null}
           <button className="primary-button" type="submit">Begin practice case <span aria-hidden="true">→</span></button>
         </form>
-        <p className="privacy-note">Your name is removed from this iPad after Mr. Patel’s Sheet confirms receipt.</p>
+        <p className="privacy-note">Your name is removed after Mr. Patel’s Sheet confirms receipt. Unsent results expire from this iPad after seven days.</p>
       </section>
     </main>
   )

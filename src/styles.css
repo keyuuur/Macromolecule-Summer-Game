@@ -366,6 +366,22 @@ button {
   text-align: center;
 }
 
+.pending-results-notice {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--coral);
+  border-radius: 0.75rem;
+  background: #fff6d9;
+}
+
+.pending-results-notice p {
+  margin: 0.35rem 0 0.65rem;
+}
+
+.pending-results-notice .text-button {
+  min-height: 44px;
+}
+
 .form-warning,
 .feedback-line {
   border-left: 4px solid #a56b00;

@@ -99,6 +99,22 @@ describe('Apps Script result contract', () => {
     expect(() => runtime.validateSubmission_(impossibleTiming)).toThrow(/Active seconds/)
   })
 
+  it('rejects unsupported actions, game versions, and incomplete identities', () => {
+    const runtime = loadGateway()
+
+    const unsupportedAction = validPayload()
+    unsupportedAction.action = 'readResults'
+    expect(() => runtime.validateSubmission_(unsupportedAction)).toThrow(/Unsupported action/)
+
+    const unsupportedVersion = validPayload()
+    unsupportedVersion.result.gameVersion = '1.0.0'
+    expect(() => runtime.validateSubmission_(unsupportedVersion)).toThrow(/game version/)
+
+    const incompleteIdentity = validPayload()
+    incompleteIdentity.result.studentName = 'Maya'
+    expect(() => runtime.validateSubmission_(incompleteIdentity)).toThrow(/first name and one last initial/)
+  })
+
   it('distinguishes exact duplicate IDs from conflicting payload hashes', () => {
     const runtime = loadGateway()
     const fakeSheet = {

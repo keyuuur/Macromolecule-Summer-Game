@@ -50,6 +50,12 @@ apply corrected ideas to fresh cases. The primary device is a school iPad.
 - Allow offline completion. Clearly distinguish local saving from confirmed Sheet
   receipt, retry queued submissions idempotently, and remove identity plus detailed
   responses locally after confirmed delivery.
+- Expire unsent detailed submissions after seven days and provide a confirmed
+  teacher-assisted delete control on the shared-iPad check-in screen.
+- Treat the anonymous Apps Script endpoint as a public, unauthenticated write
+  surface suitable only for low-stakes formative evidence. It validates shape and
+  prevents duplicate retries but cannot establish student identity or prevent
+  fabricated valid submissions.
 - Never render answer-bearing metadata before evaluation during diagnosis or
   transfer. This is a release-blocking invariant.
 - Do not claim a deployment, Sheet write, school-iPad check, or student-Wi-Fi

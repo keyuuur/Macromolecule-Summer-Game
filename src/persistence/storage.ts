@@ -4,6 +4,7 @@ import type { AttemptState, ResultSubmission, SubmissionReceipt } from '../types
 const ATTEMPT_KEY = 'macromolecule-evidence-lab-attempt-v1'
 const PENDING_KEY = 'macromolecule-evidence-lab-pending-v1'
 const RECEIPT_KEY = 'macromolecule-evidence-lab-receipt-v1'
+export const PENDING_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 export function saveAttempt(state: AttemptState): boolean {
   try {
@@ -44,10 +45,19 @@ export function queueSubmission(submission: ResultSubmission): boolean {
   }
 }
 
-export function readPending(): ResultSubmission[] {
+export function readPending(now = Date.now()): ResultSubmission[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter(isSubmission) : []
+    if (!Array.isArray(parsed)) return []
+    const valid = parsed.filter(isSubmission)
+    const fresh = valid.filter((submission) => {
+      const completedAt = Date.parse(submission.result.completedAt)
+      return Number.isFinite(completedAt) && now - completedAt <= PENDING_RETENTION_MS
+    })
+    if (fresh.length !== parsed.length) {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(fresh))
+    }
+    return fresh
   } catch {
     return []
   }
@@ -59,6 +69,10 @@ export function replacePending(submissions: readonly ResultSubmission[]): void {
 
 export function removePending(submissionId: string): void {
   replacePending(readPending().filter((item) => item.submissionId !== submissionId))
+}
+
+export function clearPending(): void {
+  try { localStorage.removeItem(PENDING_KEY) } catch { /* Storage can remain unavailable. */ }
 }
 
 export function storeReceipt(receipt: SubmissionReceipt): void {

@@ -17,7 +17,7 @@ import {
   setSyncStatus,
   touchAttempt,
 } from './engine/attempt'
-import { clearAttempt, loadAttempt, readPending, saveAttempt, storeReceipt } from './persistence/storage'
+import { clearAttempt, clearPending, loadAttempt, readPending, saveAttempt, storeReceipt } from './persistence/storage'
 import { createResultGateway, flushPending, submitOrQueue } from './results/resultGateway'
 import type { AttemptState, Macromolecule, ResultSubmission, SyncStatus } from './types'
 
@@ -45,6 +45,7 @@ export function App() {
   const [tutorialResult, setTutorialResult] = useState<TutorialResult>(null)
   const [storageWarning, setStorageWarning] = useState('')
   const [syncMessage, setSyncMessage] = useState(() => restoredSyncMessage(restored))
+  const [pendingCount, setPendingCount] = useState(() => readPending().length)
   const gateway = useMemo(() => createResultGateway(), [])
   const submittedAttempt = useRef('')
 
@@ -73,7 +74,7 @@ export function App() {
 
     if (gateway.mode === 'remote') {
       persist(setSyncStatus(state, 'sending'))
-      setSyncMessage(manual ? 'Retrying the secure result delivery…' : 'Sending the result securely…')
+      setSyncMessage(manual ? 'Retrying result delivery…' : 'Sending the result…')
     }
 
     const receipt = await submitOrQueue(gateway, submission)
@@ -88,11 +89,13 @@ export function App() {
       setSyncMessage(receipt.duplicate ? 'The Sheet already had this exact result.' : 'The Sheet confirmed this result was received.')
       storeReceipt(receipt)
       clearAttempt()
+      setPendingCount(readPending().length)
       return
     }
 
     const status: SyncStatus = receipt.retryable === false ? 'failed' : 'queued'
     persist(setSyncStatus(state, status))
+    setPendingCount(readPending().length)
     setSyncMessage(receipt.message ?? (status === 'queued' ? 'Saved on this iPad and queued for retry.' : 'The result service rejected this result.'))
   }, [gateway, persist])
 
@@ -111,6 +114,7 @@ export function App() {
     async function flushAndRefresh() {
       if (gateway.mode !== 'remote' || readPending().length === 0) return
       const flush = await flushPending(gateway)
+      setPendingCount(flush.remaining)
       if (attempt?.phase === 'results' && flush.sentSubmissionIds.includes(attempt.attemptId)) {
         setAttempt(setSyncStatus(attempt, 'received'))
         setSyncMessage('The saved result was received after reconnecting.')
@@ -156,6 +160,12 @@ export function App() {
     submittedAttempt.current = ''
   }
 
+  function deletePendingResults() {
+    if (!window.confirm('Delete all unsent student results saved on this iPad? This cannot be undone.')) return
+    clearPending()
+    setPendingCount(0)
+  }
+
   function updateTutorial(macro: Macromolecule, evidence: string) {
     setTutorialResult({
       correct: macro === TUTORIAL_CASE.correctMacro && evidence === TUTORIAL_CASE.correctEvidence,
@@ -168,7 +178,7 @@ export function App() {
   }
 
   if (!attempt) {
-    return <PageFrame warning={storageWarning}><StartScreen onStart={startAttempt} storageWarning={storageWarning} /></PageFrame>
+    return <PageFrame warning={storageWarning}><StartScreen onStart={startAttempt} pendingCount={pendingCount} onClearPending={deletePendingResults} storageWarning={storageWarning} /></PageFrame>
   }
 
   if (attempt.phase === 'tutorial') {

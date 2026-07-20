@@ -151,3 +151,22 @@ test('storage failure stays visible after the student begins', async ({ page }) 
   await expect(page.getByRole('alert')).toContainText('could not save progress')
   await expect(page.getByRole('heading', { name: 'Practice the evidence routine' })).toBeVisible()
 })
+
+test('shared iPad warns about unsent results and confirms their deletion', async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.setItem('macromolecule-evidence-lab-pending-v1', JSON.stringify([{
+      action: 'submitResult',
+      schemaVersion: 1,
+      submissionId: 'mel-shared-ipad-test',
+      result: { studentName: 'Test S', completedAt: new Date().toISOString() },
+    }]))
+  })
+  await page.reload()
+
+  await expect(page.getByText('1 unsent result is saved on this iPad.')).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Delete unsent results from this iPad' }).click()
+  await expect(page.getByText('1 unsent result is saved on this iPad.')).toHaveCount(0)
+  expect(await page.evaluate(() => localStorage.getItem('macromolecule-evidence-lab-pending-v1'))).toBeNull()
+})

@@ -7,7 +7,7 @@ const submission = {
   action: 'submitResult',
   schemaVersion: 1,
   submissionId: 'mel-test-12345',
-  result: { studentName: 'Maya J' },
+  result: { studentName: 'Maya J', completedAt: new Date().toISOString() },
 } as ResultSubmission
 
 function response(receipt: SubmissionReceipt) {

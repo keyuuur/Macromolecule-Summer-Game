@@ -12,6 +12,7 @@ It does **not** replace or deploy over the legacy Apps Script game. Use a new Ap
 - The Sheet must remain **Restricted** in Google Drive. A warning-only sheet protection reduces accidental edits but does not control Drive sharing.
 - First name plus last initial is pseudonymous classroom data, not a unique or anonymous identifier. If the same normalized identity has multiple attempts, `Summary` marks it `REVIEW` because two students can share that identity.
 - The endpoint is intentionally callable by students without accounts. Validation and idempotency prevent malformed or duplicate app retries, but they are not authentication or anti-spam controls. Do not use this service for a summative grade or sensitive student records.
+- Because the production endpoint is a public write surface, anyone who discovers it can submit a structurally valid fabricated result. Use these rows only as low-stakes formative evidence, monitor unexpected volume, and follow district retention practices for old results.
 
 ## Wire contract
 
@@ -25,8 +26,8 @@ Send `POST` requests with `Content-Type: text/plain;charset=utf-8` to avoid a cr
   "result": {
     "timestamp": "2026-07-15T20:00:00.000Z",
     "game": "Macromolecule Evidence Lab",
-    "gameVersion": "1.0.0",
-    "contentVersion": "unit2-v1",
+    "gameVersion": "evidence-lab-v1",
+    "contentVersion": "unit2-slides-11-16-v1",
     "studentName": "Ada L",
     "startedAt": "2026-07-15T19:48:00.000Z",
     "completedAt": "2026-07-15T20:00:00.000Z",
@@ -82,7 +83,7 @@ Do not rename these tabs or their header columns. If existing headers differ, th
 
 1. Create a new Google Sheet for this project and leave its Drive sharing set to **Restricted**.
 2. Create a new Apps Script project owned by the same teacher account. Do not reuse the legacy game's project or URL.
-3. Add `Code.gs` from this folder and confirm the runtime is V8.
+3. Add `Code.gs` and `appsscript.json` from this folder and confirm the runtime is V8. The included `.claspignore` prevents the README and local contract test from being pushed into Apps Script if CLASP is used.
 4. If the script is bound to the results Sheet, run `setupMacromoleculeResultsGateway()` once. If it is standalone, run `configureResultsSpreadsheet("SHEET_ID")` from a temporary editor call, then remove the literal ID from the editor and save.
 5. Approve the requested Sheet permissions.
 6. Confirm the `Results` and `Summary` tabs exist, each has the documented header row, and each displays an edit warning.

@@ -2,11 +2,12 @@
 
 ## Last Updated and Scope
 
-- Date: 2026-07-16
+- Date: 2026-07-20
 - Scope: Macromolecule Evidence Lab repository migration, student app, content,
   local persistence/PWA behavior, private results gateway, and release gates
-- State: implementation and local automated verification complete; external
-  deployment and physical classroom pilot remain blocked on explicit approval
+- State: implementation and release hardening complete; external deployment is
+  approved but blocked on the school-account Sheet/browser and Vercel
+  authentication gates; the physical classroom pilot remains open
 
 ## Branch and Preservation Posture
 
@@ -49,21 +50,30 @@
 - Current product, learning-design, backend, setup, privacy, and release-gate
   documentation. Unit 2 alignment retains the course model while correcting the
   lipid-polymer and ATP classification caveats.
+- Release hardening adds a least-privilege V8 Apps Script manifest and CLASP
+  push allowlist, corrects the documented accepted version values, and tests
+  unsupported actions, stale versions, and incomplete identities.
+- Shared-iPad privacy now expires undelivered detailed submissions after seven
+  days, shows their count at check-in, and provides a confirmed teacher-assisted
+  deletion control. Delivery copy no longer implies that the anonymous endpoint
+  authenticates the sender.
 
 ## Verified Evidence
 
-The combined `npm run verify` command passed on 2026-07-16:
+The combined `npm run verify` command passed on 2026-07-20:
 
 - ESLint: passed with no warnings or errors.
-- Vitest: 6 files and 24 tests passed.
+- Vitest: 7 files and 27 tests passed.
 - TypeScript/Vite production build: passed.
 - PWA generation: service worker created with five precached shell entries.
-- Playwright: 12 of 12 touch-enabled browser journeys passed on isolated port
+- Playwright: 14 of 14 touch-enabled browser journeys passed on isolated port
   `49317`, at 768×1024 portrait and 1024×768 landscape.
 - Browser journeys cover all-correct, first-try misconception and repair, fresh
   transfer, answer-hiding, stable refresh/resume ordering, offline reload and
   completion, local-only result status, keyboard navigation, automated serious
   accessibility findings, storage failure, and repeat-attempt reset.
+- The additional shared-iPad journeys verify that an unsent result is visible at
+  check-in and that the confirmed delete control removes its queued payload.
 - Backend contract tests cover accepted/rejected payload relationships, exact
   version allowlists, active-vs-elapsed time, duplicate/conflicting IDs, and
   Summary latest/best/source/collision recomputation.
@@ -79,6 +89,10 @@ The combined `npm run verify` command passed on 2026-07-16:
 - No Vercel preview or production deployment has been created.
 - No new Apps Script project, test deployment, Script Property, or private Sheet
   has been created or changed.
+- The connected Drive tool is signed into a personal account rather than the
+  required school account, the spreadsheet authoring runtime is disabled in
+  Codex settings, and no controllable authenticated browser/Vercel project is
+  currently available. Do not create the live Sheet in the personal account.
 - The backend has not yet been exercised inside the Apps Script runtime against
   an isolated test Sheet; lock/write behavior and exact `Results`/`Summary` rows
   still require that controlled test.

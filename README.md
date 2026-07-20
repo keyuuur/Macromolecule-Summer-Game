@@ -32,6 +32,10 @@ foods can contain more than one kind of macromolecule.
 The result endpoint is inactive when `VITE_RESULTS_ENDPOINT` is not configured.
 Local and preview development must remain disconnected from the live Sheet.
 
+If a result cannot be delivered, the full queued submission remains only on that
+iPad for at most seven days. The check-in screen shows any unsent results and
+provides a confirmed teacher-assisted delete control for shared devices.
+
 ## Local Development
 
 ```powershell
