@@ -12,12 +12,16 @@
 ## Branch and Preservation Posture
 
 - Project root: `C:\Users\Keyur\Desktop\Claude Code YEET\Teacher Coding Projects\Summer School 26\Macromolecule Summer Game`
-- Branch: `codex/macromolecule-evidence-lab`
+- Branch: `main`
 - Baseline: `02b8d6a` from `origin/main`
 - Legacy checkpoint: `5c68afd chore: preserve legacy app context and asset tooling`
 - Preservation tag: `legacy-appscript-v1`
 - Verified implementation checkpoint:
   `aebf7d9 feat: build macromolecule evidence lab`
+- Verified release-hardening checkpoint:
+  `7125fd4 feat: harden live results release`
+- `main` and `codex/macromolecule-evidence-lab` both point to `7125fd4` on
+  GitHub after a fast-forward merge.
 - The old Apps Script student app and historical handoffs are preserved under
   `legacy/apps-script-v1/`; the historical deployment was not changed.
 - Machine-local CLASP/auth files, dependencies, generated screenshots, browser
@@ -84,15 +88,32 @@ The combined `npm run verify` command passed on 2026-07-20:
   check-in and tutorial controls have clear names and the intended visual
   hierarchy.
 
+## External Setup Completed on 2026-07-20
+
+- A new Spreadsheet-bound Apps Script project was created with the school CLASP
+  account for `Macromolecule Ticket Out Results`; the reviewed `Code.gs` and
+  minimal V8 manifest were pushed to that new project only.
+- The new script has no public web-app deployment. A temporary owner-only API
+  deployment used to probe non-interactive setup was removed after Google
+  required interactive consent.
+- An endpoint-free Vercel preview artifact was created from the verified build.
+  It is protected by Vercel authentication and cannot submit results.
+- The legacy Apps Script project and deployment were not opened, pushed, or
+  changed.
+
 ## Release Gates Still Open
 
-- No Vercel preview or production deployment has been created.
-- No new Apps Script project, test deployment, Script Property, or private Sheet
-  has been created or changed.
-- The connected Drive tool is signed into a personal account rather than the
-  required school account, the spreadsheet authoring runtime is disabled in
-  Codex settings, and no controllable authenticated browser/Vercel project is
-  currently available. Do not create the live Sheet in the personal account.
+- No Vercel Production deployment or results endpoint configuration exists.
+- The new Sheet and bound script exist, but interactive Google authorization has
+  not completed. The setup function has not run, so `Results`, `Summary`, their
+  protections, and `RESULTS_SPREADSHEET_ID` are not yet verified.
+- The connected Drive tool remains signed into a personal account rather than
+  the school account, the spreadsheet authoring runtime remains disabled, and
+  Codex has no controllable authenticated browser. Do not recreate or edit the
+  school Sheet through the personal Drive connector.
+- The Vercel connector created the protected preview but cannot inspect or
+  configure its team scope without reauthentication. Production environment
+  configuration remains blocked on that authentication.
 - The backend has not yet been exercised inside the Apps Script runtime against
   an isolated test Sheet; lock/write behavior and exact `Results`/`Summary` rows
   still require that controlled test.
@@ -105,13 +126,18 @@ The combined `npm run verify` command passed on 2026-07-20:
 
 ## Exact Next Recommended Actions
 
-1. Review the local implementation and this handoff; do not connect live data yet.
-2. With explicit approval, create a Vercel preview with no results endpoint and
-   browser-verify its public access boundary.
-3. With separate approval, create a new Apps Script test project and disposable
-   private Sheet; verify health, one controlled result, exact duplicate,
-   conflicting duplicate, invalid payloads, both Sheet tabs, and cleanup.
-4. Connect only Vercel Production to the approved `/exec` endpoint after those
+1. In the already-open school Apps Script editor, rename the project to
+   `Macromolecule Ticket Out Results Gateway`, run
+   `setupMacromoleculeResultsGateway`, and complete Google consent as
+   `patelk07@psdr3.org`.
+2. Verify the school Sheet is Restricted and owner-only, with exact empty
+   `Results` and `Summary` schemas, frozen row 1, warning protections, and the
+   Script Property configured.
+3. Create the new anonymous web-app deployment only if the district account
+   offers the required access option; then verify health, one controlled result,
+   exact duplicate, conflicting duplicate, invalid payloads, and cleanup.
+4. Reauthenticate the Vercel account, connect the GitHub `main` project, and set
+   `VITE_RESULTS_ENDPOINT` for Production only. Connect Vercel Production after
    checks pass; keep previews and local builds disconnected.
 5. Pilot on a real school iPad in both orientations over student Wi-Fi, including
    offline/reconnect and a representative 10–15 minute completion.
@@ -120,9 +146,9 @@ The combined `npm run verify` command passed on 2026-07-20:
 
 ## Explicit Boundaries
 
-- Do not deploy, publish, configure the live Sheet, push Apps Script, alter the
-  legacy deployment, write test rows, or delete controlled data without explicit
-  approval.
+- Do not create an anonymous web deployment if district policy blocks that
+  access level. Do not alter the legacy deployment or write real student data
+  before controlled verification completes.
 - Do not describe the app as classroom-released while the external and physical
   gates above remain open.
 - Do not expose credentials, project IDs, Sheet links, student data, or a public
