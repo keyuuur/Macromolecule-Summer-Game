@@ -2,16 +2,18 @@
 
 ## Last Updated and Scope
 
-- Date: 2026-07-20
+- Date: 2026-07-26
 - Scope: Macromolecule Evidence Lab repository migration, student app, content,
   local persistence/PWA behavior, private results gateway, and release gates
-- State: implementation and release hardening complete; external deployment is
-  approved but blocked on the school-account Sheet/browser and Vercel
-  authentication gates; the physical classroom pilot remains open
+- State: implementation and release hardening complete; GitHub and the reviewed
+  Apps Script source are synchronized. A public Vercel Production-target build
+  exists but is intentionally disconnected from results. Live result collection
+  remains blocked on school-Google authorization, controlled backend checks, and
+  the physical classroom pilot.
 
 ## Branch and Preservation Posture
 
-- Project root: `C:\Users\Keyur\Desktop\Claude Code YEET\Teacher Coding Projects\Summer School 26\Macromolecule Summer Game`
+- Project root: `C:\Users\Keyur\Desktop\Claude Code YEET\Teacher Coding Projects\Teacher Context\Summer School 26\Macromolecule Summer Game`
 - Branch: `main`
 - Baseline: `02b8d6a` from `origin/main`
 - Legacy checkpoint: `5c68afd chore: preserve legacy app context and asset tooling`
@@ -20,8 +22,12 @@
   `aebf7d9 feat: build macromolecule evidence lab`
 - Verified release-hardening checkpoint:
   `7125fd4 feat: harden live results release`
-- `main` and `codex/macromolecule-evidence-lab` both point to `7125fd4` on
-  GitHub after a fast-forward merge.
+- Before this closeout handoff, `main` and `origin/main` pointed to `61cdc20`.
+  The feature branch remains at `7125fd4`; it does not need to be advanced
+  because the completed work is already on `main`.
+- This closeout handoff is intended to be the newest `origin/main` checkpoint.
+  A future session should confirm it with `git status --short --branch` and
+  `git log -1 --oneline` rather than relying on an embedded hash.
 - The old Apps Script student app and historical handoffs are preserved under
   `legacy/apps-script-v1/`; the historical deployment was not changed.
 - Machine-local CLASP/auth files, dependencies, generated screenshots, browser
@@ -64,7 +70,7 @@
 
 ## Verified Evidence
 
-The combined `npm run verify` command passed on 2026-07-20:
+The combined `npm run verify` command passed again on 2026-07-26:
 
 - ESLint: passed with no warnings or errors.
 - Vitest: 7 files and 27 tests passed.
@@ -88,22 +94,32 @@ The combined `npm run verify` command passed on 2026-07-20:
   check-in and tutorial controls have clear names and the intended visual
   hierarchy.
 
-## External Setup Completed on 2026-07-20
+## External Synchronization Verified on 2026-07-26
 
 - A new Spreadsheet-bound Apps Script project was created with the school CLASP
   account for `Macromolecule Ticket Out Results`; the reviewed `Code.gs` and
-  minimal V8 manifest were pushed to that new project only.
-- The new script has no public web-app deployment. A temporary owner-only API
-  deployment used to probe non-interactive setup was removed after Google
-  required interactive consent.
-- An endpoint-free Vercel preview artifact was created from the verified build.
-  It is protected by Vercel authentication and cannot submit results.
+  minimal V8 manifest were pushed again from `backend/apps-script/` on
+  2026-07-26. CLASP tracked exactly those two deployable files.
+- CLASP reported zero deployments for the new script on 2026-07-26. The setup
+  function and interactive authorization are still not confirmed, and there is
+  no public Apps Script web-app URL.
+- Vercel reports one READY deployment targeting Production at
+  `https://macromolecule-evidence-lab.vercel.app`. The public page returned HTTP
+  200 on 2026-07-26. Inspection of its shipped JavaScript found no
+  `script.google.com` host or configured results endpoint, so this build cannot
+  submit to the Sheet.
+- The Vercel project exists, but its metadata does not establish that the current
+  deployment came from GitHub `main`; it appears to be the earlier static
+  artifact upload. Do not treat it as the final classroom deployment.
 - The legacy Apps Script project and deployment were not opened, pushed, or
   changed.
 
 ## Release Gates Still Open
 
-- No Vercel Production deployment or results endpoint configuration exists.
+- A public Vercel Production-target deployment exists, but it is endpoint-free
+  and therefore cannot collect results. Its connection to GitHub `main`,
+  Production-only environment configuration, and release provenance are not yet
+  verified.
 - The new Sheet and bound script exist, but interactive Google authorization has
   not completed. The setup function has not run, so `Results`, `Summary`, their
   protections, and `RESULTS_SPREADSHEET_ID` are not yet verified.
@@ -111,9 +127,11 @@ The combined `npm run verify` command passed on 2026-07-20:
   the school account, the spreadsheet authoring runtime remains disabled, and
   Codex has no controllable authenticated browser. Do not recreate or edit the
   school Sheet through the personal Drive connector.
-- The Vercel connector created the protected preview but cannot inspect or
-  configure its team scope without reauthentication. Production environment
-  configuration remains blocked on that authentication.
+- The Vercel connector can now inspect the project and deployment. It does not
+  expose the environment-variable controls needed to configure
+  `VITE_RESULTS_ENDPOINT`; that Production-only step still requires authenticated
+  Vercel project settings or an authenticated CLI session after the backend is
+  ready.
 - The backend has not yet been exercised inside the Apps Script runtime against
   an isolated test Sheet; lock/write behavior and exact `Results`/`Summary` rows
   still require that controlled test.
@@ -136,9 +154,10 @@ The combined `npm run verify` command passed on 2026-07-20:
 3. Create the new anonymous web-app deployment only if the district account
    offers the required access option; then verify health, one controlled result,
    exact duplicate, conflicting duplicate, invalid payloads, and cleanup.
-4. Reauthenticate the Vercel account, connect the GitHub `main` project, and set
-   `VITE_RESULTS_ENDPOINT` for Production only. Connect Vercel Production after
-   checks pass; keep previews and local builds disconnected.
+4. In authenticated Vercel project settings, connect the GitHub `main` project
+   and set `VITE_RESULTS_ENDPOINT` for Production only. Redeploy from the
+   verified `main` commit after the backend checks pass; keep previews and local
+   builds disconnected.
 5. Pilot on a real school iPad in both orientations over student Wi-Fi, including
    offline/reconnect and a representative 10–15 minute completion.
 6. Keep the legacy deployment unchanged until the pilot passes and Keyur

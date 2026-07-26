@@ -68,8 +68,9 @@ Only first name plus one last initial is collected. Student names and detailed
 responses must not appear in public views. There is no public read or leaderboard
 endpoint.
 
-The legacy Apps Script deployment has not been replaced. No Vercel production
-deployment or live Google Sheet connection should occur until the automated,
-browser, school-iPad, student-Wi-Fi, and controlled result-submission gates in
-`docs/handoffs/CURRENT_STATUS.md` are satisfied and Keyur explicitly approves the
-external change.
+The legacy Apps Script deployment has not been replaced. An endpoint-free Vercel
+build is publicly available for safe review, but it is not connected to the
+Google Sheet and is not classroom-released. No live Google Sheet connection
+should occur until the automated, browser, school-iPad, student-Wi-Fi, and
+controlled result-submission gates in `docs/handoffs/CURRENT_STATUS.md` are
+satisfied and Keyur explicitly approves the external change.
